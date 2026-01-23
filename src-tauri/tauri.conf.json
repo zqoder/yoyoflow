@@ -19,6 +19,17 @@
         "minHeight": 600,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true
+      },
+      {
+        "label": "shortcut_translate",
+        "title": "Shortcut Translate",
+        "url": "/shortcut-translate",
+        "width": 600,
+        "height": 400,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

@@ -3,11 +3,13 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main"
+    "main",
+    "shortcut_translate"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
+    "core:window:allow-hide",
     "global-shortcut:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-is-registered",
