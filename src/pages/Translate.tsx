@@ -1,28 +1,9 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ArrowRightLeft } from "lucide-react";
 import { TranslationItem } from "@/components/TranslationItem";
 import { useServiceStore } from "@/store/services";
-
-const LANGUAGES = [
-  { value: "auto", label: "自动检测" },
-  { value: "zh", label: "中文" },
-  { value: "en", label: "英语" },
-  { value: "ja", label: "日语" },
-  { value: "ko", label: "韩语" },
-  { value: "fr", label: "法语" },
-  { value: "de", label: "德语" },
-  { value: "es", label: "西班牙语" },
-  { value: "ru", label: "俄语" },
-];
+import { LANGUAGES, detectLanguage } from "@/lib/languages";
+import { ControlBar } from "@/components/ControlBar";
 
 export default function Translate() {
   const [inputText, setInputText] = useState("");
@@ -40,16 +21,6 @@ export default function Translate() {
       setSourceLang(targetLang);
       setTargetLang(sourceLang);
     }
-  };
-
-  const detectLanguage = (text: string) => {
-    if (!text.trim()) return "auto";
-    const sample = text.slice(0, 50);
-    if (/[\u3040-\u309f\u30a0-\u30ff]/.test(sample)) return "ja"; // Japanese Kana
-    if (/[\uac00-\ud7af]/.test(sample)) return "ko"; // Korean Hangul
-    if (/[\u0400-\u04FF]/.test(sample)) return "ru"; // Cyrillic
-    if (/[\u4e00-\u9fa5]/.test(sample)) return "zh"; // Chinese Characters
-    return "en"; // Default to English/Latin
   };
 
   const detectedLangCode =
@@ -97,48 +68,14 @@ export default function Translate() {
       </div>
 
       {/* Control Bar */}
-      <div className="flex items-center justify-between rounded-lg bg-muted/30 p-2">
-        <div className="flex items-center gap-2">
-          <Select value={sourceLang} onValueChange={setSourceLang}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="选择语言" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.map((lang) => (
-                <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSwapLanguages}
-            className="rounded-full hover:bg-muted"
-          >
-            <ArrowRightLeft className="h-4 w-4" />
-          </Button>
-
-          <Select value={targetLang} onValueChange={setTargetLang}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="选择语言" />
-            </SelectTrigger>
-            <SelectContent>
-              {LANGUAGES.filter((l) => l.value !== "auto").map((lang) => (
-                <SelectItem key={lang.value} value={lang.value}>
-                  {lang.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button onClick={handleTranslate} size="sm">
-          翻译
-        </Button>
-      </div>
+      <ControlBar
+        sourceLang={sourceLang}
+        targetLang={targetLang}
+        onSourceChange={setSourceLang}
+        onTargetChange={setTargetLang}
+        onSwap={handleSwapLanguages}
+        onTranslate={handleTranslate}
+      />
 
       {/* Result Area */}
       <div className="flex flex-col gap-4">

@@ -1,7 +1,7 @@
 import ky from "ky";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Volume2, Check, RotateCw } from "lucide-react";
+import { Copy, Volume2, Check, RotateCw, ChevronDown, ChevronUp } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { ServiceConfig } from "@/store/services";
 
@@ -12,6 +12,7 @@ interface TranslationItemProps {
   targetLang: string;
   sourceLangLabel: string;
   targetLangLabel: string;
+  className?: string;
 }
 
 export function TranslationItem({
@@ -20,6 +21,7 @@ export function TranslationItem({
   targetLang,
   sourceLangLabel,
   targetLangLabel,
+  className,
 }: TranslationItemProps) {
   const [copied, setCopied] = useState(false);
   const [translatedText, setTranslatedText] = useState("");
@@ -29,6 +31,7 @@ export function TranslationItem({
 
   const [retryCount, setRetryCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     if (!text.trim()) {
@@ -249,25 +252,46 @@ export function TranslationItem({
     }
   };
 
+  const isSmall = className?.includes("text-sm");
+
   return (
-    <Card className="bg-muted/20">
-      <CardHeader className="py-2 px-4 border-b flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+    <Card className={`bg-muted/20 ${className || ""}`}>
+      <CardHeader className={`py-2 px-4 space-y-0 ${!isCollapsed ? "border-b" : ""} flex flex-row items-center justify-between ${isSmall ? "py-1 px-3" : ""}`}>
+        <CardTitle className={`text-sm font-medium text-muted-foreground ${isSmall ? "text-xs" : ""}`}>
           {service.name}
         </CardTitle>
-        {!!error && (
+        <div className="flex items-center gap-1">
+          {!!error && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setRetryCount((prev) => prev + 1);
+              }}
+              title="重试"
+            >
+              <RotateCw className="h-3 w-3" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-destructive"
-            onClick={() => setRetryCount((prev) => prev + 1)}
-            title="重试"
+            className={`h-6 w-6 ${isSmall ? "h-5 w-5" : ""}`}
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            title={isCollapsed ? "展开" : "折叠"}
           >
-            <RotateCw className="h-3 w-3" />
+            {isCollapsed ? (
+              <ChevronDown className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
+            ) : (
+              <ChevronUp className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
+            )}
           </Button>
-        )}
+        </div>
       </CardHeader>
-      <CardContent className="p-4 relative min-h-[100px]">
+      {!isCollapsed && (
+        <CardContent className={`p-4 relative min-h-[50px] ${isSmall ? "p-3" : ""}`}>
         {isLoading && !translatedText ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
             <RotateCw className="h-4 w-4 animate-spin mr-2" />
@@ -278,7 +302,7 @@ export function TranslationItem({
             翻译失败: {error instanceof Error ? error.message : "未知错误"}
           </div>
         ) : (
-          <div className="whitespace-pre-wrap text-base">{translatedText}</div>
+          <div className={`whitespace-pre-wrap ${isSmall ? "text-sm" : "text-base"}`}>{translatedText}</div>
         )}
 
         {!isLoading && !error && translatedText && (
@@ -286,33 +310,34 @@ export function TranslationItem({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className={`h-8 w-8 ${isSmall ? "h-6 w-6" : ""}`}
               onClick={handleSpeak}
               disabled={isSpeaking}
               title="朗读"
             >
               {isSpeaking ? (
-                <RotateCw className="h-4 w-4 animate-spin" />
+                <RotateCw className={`h-4 w-4 animate-spin ${isSmall ? "h-3 w-3" : ""}`} />
               ) : (
-                <Volume2 className="h-4 w-4" />
+                <Volume2 className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
               )}
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className={`h-8 w-8 ${isSmall ? "h-6 w-6" : ""}`}
               onClick={handleCopy}
               title="复制"
             >
               {copied ? (
-                <Check className="h-4 w-4 text-green-500" />
+                <Check className={`h-4 w-4 text-green-500 ${isSmall ? "h-3 w-3" : ""}`} />
               ) : (
-                <Copy className="h-4 w-4" />
+                <Copy className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
               )}
             </Button>
           </div>
         )}
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   );
 }

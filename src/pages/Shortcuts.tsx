@@ -12,10 +12,15 @@ import { useSettingsStore } from "@/store/settings";
 type ShortcutField = "main" | "inputTranslate";
 
 export default function Shortcuts() {
-  const { shortcut, setShortcut, inputTranslateShortcut, setInputTranslateShortcut } = useSettingsStore();
+  const {
+    shortcut,
+    setShortcut,
+    inputTranslateShortcut,
+    setInputTranslateShortcut,
+  } = useSettingsStore();
   const [activeField, setActiveField] = useState<ShortcutField | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
+
   const mainInputRef = useRef<HTMLInputElement>(null);
   const translateInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,9 +32,12 @@ export default function Shortcuts() {
     }
   }, [activeField]);
 
-  const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>, field: ShortcutField) => {
+  const handleKeyDown = async (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    field: ShortcutField,
+  ) => {
     if (activeField !== field) return;
-    
+
     e.preventDefault();
     e.stopPropagation();
     setError(null);
@@ -53,9 +61,9 @@ export default function Shortcuts() {
 
       try {
         if (field === "main") {
-            await setShortcut(newShortcut);
+          await setShortcut(newShortcut);
         } else {
-            await setInputTranslateShortcut(newShortcut);
+          await setInputTranslateShortcut(newShortcut);
         }
         setActiveField(null);
         if (field === "main") mainInputRef.current?.blur();
@@ -67,9 +75,9 @@ export default function Shortcuts() {
   };
 
   const handleBlur = (field: ShortcutField) => {
-      if (activeField === field) {
-          setActiveField(null);
-      }
+    if (activeField === field) {
+      setActiveField(null);
+    }
   };
 
   return (
@@ -81,21 +89,27 @@ export default function Shortcuts() {
           <Input
             ref={mainInputRef}
             id="shortcut-input-main"
-            value={activeField === "main" ? "请按键盘设置快捷键..." : shortcut || "未设置"}
+            value={
+              activeField === "main"
+                ? "请按键盘设置快捷键..."
+                : shortcut || "未设置"
+            }
             readOnly
             className={`cursor-pointer my-2 ${activeField === "main" ? "border-primary ring-2 ring-primary/20" : ""}`}
             onClick={() => setActiveField("main")}
             onKeyDown={(e) => handleKeyDown(e, "main")}
             onBlur={() => handleBlur("main")}
           />
-          {activeField === "main" && error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {activeField === "main" && error && (
+            <p className="text-sm text-destructive mt-1">{error}</p>
+          )}
           <ItemDescription>
             <div className="text-sm text-muted-foreground flex items-center gap-2">
               <span>点击输入框开始录制快捷键。支持组合键，如</span>
               <div className="flex gap-1">
-                <Kbd>Command</Kbd>
+                <Kbd>⌘</Kbd>
                 <span>+</span>
-                <Kbd>Shift</Kbd>
+                <Kbd>⇧</Kbd>
                 <span>+</span>
                 <Kbd>U</Kbd>
               </div>
@@ -111,19 +125,25 @@ export default function Shortcuts() {
           <Input
             ref={translateInputRef}
             id="shortcut-input-translate"
-            value={activeField === "inputTranslate" ? "请按键盘设置快捷键..." : inputTranslateShortcut || "未设置"}
+            value={
+              activeField === "inputTranslate"
+                ? "请按键盘设置快捷键..."
+                : inputTranslateShortcut || "未设置"
+            }
             readOnly
             className={`cursor-pointer my-2 ${activeField === "inputTranslate" ? "border-primary ring-2 ring-primary/20" : ""}`}
             onClick={() => setActiveField("inputTranslate")}
             onKeyDown={(e) => handleKeyDown(e, "inputTranslate")}
             onBlur={() => handleBlur("inputTranslate")}
           />
-          {activeField === "inputTranslate" && error && <p className="text-sm text-destructive mt-1">{error}</p>}
+          {activeField === "inputTranslate" && error && (
+            <p className="text-sm text-destructive mt-1">{error}</p>
+          )}
           <ItemDescription>
             <div className="text-sm text-muted-foreground flex items-center gap-2">
               <span>点击输入框开始录制快捷键。支持组合键，如</span>
               <div className="flex gap-1">
-                <Kbd>Control</Kbd>
+                <Kbd>⌃</Kbd>
                 <span>+</span>
                 <Kbd>A</Kbd>
               </div>
