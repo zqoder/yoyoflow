@@ -60,11 +60,17 @@ export default function ShortcutTranslate() {
   const targetLangLabel =
     LANGUAGES.find((l) => l.value === targetLang)?.label || targetLang;
 
+  const handleClose = async () => {
+    setText("");
+    setSubmittedText("");
+    await getCurrentWindow().hide();
+  };
+
   // Close window on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        getCurrentWindow().hide();
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -91,7 +97,7 @@ export default function ShortcutTranslate() {
       // However, sometimes it triggers unexpectedly.
       // Let's try to verify if we really lost focus.
       if (!isPinnedRef.current) {
-        getCurrentWindow().hide();
+        handleClose();
       }
     });
 
@@ -129,7 +135,7 @@ export default function ShortcutTranslate() {
               variant="ghost"
               size="icon"
               className="h-6 w-6 text-muted-foreground hover:text-foreground"
-              onClick={() => getCurrentWindow().hide()}
+              onClick={handleClose}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -142,7 +148,7 @@ export default function ShortcutTranslate() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="输入要翻译的文本..."
-            className="min-h-[100px] resize-none border-none shadow-none focus-visible:ring-0 px-0 py-0 text-sm bg-transparent pb-6"
+            className="min-h-[50px] resize-none border-none shadow-none focus-visible:ring-0 px-0 py-0 text-sm bg-transparent pb-6"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 handleTranslate();
@@ -169,20 +175,20 @@ export default function ShortcutTranslate() {
         />
 
         <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-4 text-sm">
-            {submittedText && activeServices.length > 0 ? (
-              activeServices.map((service) => (
-                <TranslationItem
-                  key={service.id}
-                  service={service}
-                  text={submittedText}
-                  sourceLang={effectiveSourceLang}
-                  targetLang={targetLang}
-                  sourceLangLabel={effectiveSourceLangLabel || ""}
-                  targetLangLabel={targetLangLabel || ""}
-                  className="text-sm"
-                />
-              ))
-            ) : submittedText && activeServices.length === 0 ? (
+          {submittedText && activeServices.length > 0 ? (
+            activeServices.map((service) => (
+              <TranslationItem
+                key={service.id}
+                service={service}
+                text={submittedText}
+                sourceLang={effectiveSourceLang}
+                targetLang={targetLang}
+                sourceLangLabel={effectiveSourceLangLabel || ""}
+                targetLangLabel={targetLangLabel || ""}
+                className="text-sm"
+              />
+            ))
+          ) : submittedText && activeServices.length === 0 ? (
             <div className="text-center text-sm text-muted-foreground py-4">
               未启用任何翻译服务，请在“服务”设置中启用。
             </div>

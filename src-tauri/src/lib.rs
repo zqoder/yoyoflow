@@ -1,6 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use std::str::FromStr;
 use std::sync::Mutex;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -92,19 +93,38 @@ pub fn run() {
             let icon =
                 tauri::image::Image::from_bytes(include_bytes!("../icons/menuIconLight.png"))?;
 
+            let state = app.state::<AppState>();
+            let main_shortcut = state.main_shortcut.lock().unwrap().clone();
+            let input_shortcut = state.input_translate_shortcut.lock().unwrap().clone();
+
+            let main_item = MenuItem::with_id(app, "main", "主窗口", true, Some(&main_shortcut))?;
+            let input_item =
+                MenuItem::with_id(app, "input", "输入翻译", true, Some(&input_shortcut))?;
+
+            let separator = PredefinedMenuItem::separator(app)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+
+            let menu = Menu::with_items(app, &[&main_item, &input_item, &separator, &quit_item])?;
+
             tauri::tray::TrayIconBuilder::new()
                 .icon(icon)
                 .icon_as_template(true)
-                .on_tray_icon_event(|tray, event| match event {
-                    tauri::tray::TrayIconEvent::Click {
-                        button: tauri::tray::MouseButton::Left,
-                        ..
-                    } => {
-                        let app = tray.app_handle();
+                .menu(&menu)
+                .on_menu_event(move |app, event| match event.id().as_ref() {
+                    "main" => {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.set_focus();
                         }
+                    }
+                    "input" => {
+                        if let Some(window) = app.get_webview_window("shortcut_translate") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
                     }
                     _ => {}
                 })
