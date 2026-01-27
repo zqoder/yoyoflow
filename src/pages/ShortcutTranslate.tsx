@@ -19,6 +19,7 @@ export default function ShortcutTranslate() {
   const isPinnedRef = useRef(false);
 
   const services = useServiceStore((state) => state.services);
+  const refreshServices = useServiceStore((state) => state.refreshServices);
   const activeServices = services.filter((s) => s.enabled);
 
   const togglePin = async () => {
@@ -39,7 +40,6 @@ export default function ShortcutTranslate() {
   };
 
   const handleTranslate = () => {
-    console.log("handleTranslate", text);
     if (!text.trim()) return;
     setSubmittedText(text);
   };
@@ -87,6 +87,8 @@ export default function ShortcutTranslate() {
       inputRef.current?.focus();
       // Select all text when refocused
       inputRef.current?.select();
+      // Refresh services configuration
+      refreshServices();
     });
 
     // Close window on blur
@@ -101,11 +103,36 @@ export default function ShortcutTranslate() {
       }
     });
 
+    // Listen for selection translate event
+    const unlistenSelection = getCurrentWindow().listen<string>(
+      "selection-translate",
+      (event) => {
+        const selectedText = event.payload;
+        if (selectedText) {
+          setText(selectedText);
+          setSubmittedText(selectedText);
+          // If we want to ensure window is visible and focused (backend handles it too)
+          getCurrentWindow().show();
+          getCurrentWindow().setFocus();
+        }
+      },
+    );
+
     return () => {
       unlistenFocus.then((f) => f());
       unlistenBlur.then((f) => f());
+      unlistenSelection.then((f) => f());
     };
   }, []);
+
+  // Auto resize textarea based on content
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [text]);
 
   return (
     <div className="h-screen w-full bg-transparent flex items-center justify-center">
@@ -148,14 +175,14 @@ export default function ShortcutTranslate() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="输入要翻译的文本..."
-            className="min-h-[50px] resize-none border-none shadow-none focus-visible:ring-0 px-0 py-0 text-sm bg-transparent pb-6"
+            className="min-h-[50px] resize-none border-none shadow-none focus-visible:ring-0 px-0 py-0 pb-2 text-sm bg-transparent"
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 handleTranslate();
               }
             }}
           />
-          <div className="absolute bottom-2 right-3 text-xs text-muted-foreground flex gap-3 pointer-events-none">
+          <div className="absolute bottom-0 right-3 text-xs text-muted-foreground flex gap-3 pointer-events-none">
             {sourceLang === "auto" && detectedLangLabel && (
               <span>检测为: {detectedLangLabel}</span>
             )}

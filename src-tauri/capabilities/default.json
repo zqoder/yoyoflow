@@ -15,6 +15,7 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-is-registered",
     "global-shortcut:allow-unregister",
+    "clipboard-manager:default",
     "opener:default",
     "store:default"
   ]

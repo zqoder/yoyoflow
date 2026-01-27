@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/item";
 import { useSettingsStore } from "@/store/settings";
 
-type ShortcutField = "main" | "inputTranslate";
+type ShortcutField = "main" | "inputTranslate" | "selectionTranslate";
 
 export default function Shortcuts() {
   const {
@@ -17,18 +17,23 @@ export default function Shortcuts() {
     setShortcut,
     inputTranslateShortcut,
     setInputTranslateShortcut,
+    selectionTranslateShortcut,
+    setSelectionTranslateShortcut,
   } = useSettingsStore();
   const [activeField, setActiveField] = useState<ShortcutField | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const mainInputRef = useRef<HTMLInputElement>(null);
   const translateInputRef = useRef<HTMLInputElement>(null);
+  const selectionInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (activeField === "main" && mainInputRef.current) {
       mainInputRef.current.focus();
     } else if (activeField === "inputTranslate" && translateInputRef.current) {
       translateInputRef.current.focus();
+    } else if (activeField === "selectionTranslate" && selectionInputRef.current) {
+      selectionInputRef.current.focus();
     }
   }, [activeField]);
 
@@ -62,12 +67,15 @@ export default function Shortcuts() {
       try {
         if (field === "main") {
           await setShortcut(newShortcut);
-        } else {
+        } else if (field === "inputTranslate") {
           await setInputTranslateShortcut(newShortcut);
+        } else {
+          await setSelectionTranslateShortcut(newShortcut);
         }
         setActiveField(null);
         if (field === "main") mainInputRef.current?.blur();
-        else translateInputRef.current?.blur();
+        else if (field === "inputTranslate") translateInputRef.current?.blur();
+        else selectionInputRef.current?.blur();
       } catch (err) {
         setError("设置失败：快捷键可能被占用或不支持");
       }
@@ -146,6 +154,39 @@ export default function Shortcuts() {
                 <Kbd>⌃</Kbd>
                 <span>+</span>
                 <Kbd>A</Kbd>
+              </div>
+            </div>
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+      {/* Selection Translate Shortcut */}
+      <Item variant="outline" className="bg-muted">
+        <ItemContent>
+          <ItemTitle>划词翻译</ItemTitle>
+          <Input
+            ref={selectionInputRef}
+            id="shortcut-input-selection"
+            value={
+              activeField === "selectionTranslate"
+                ? "请按键盘设置快捷键..."
+                : selectionTranslateShortcut || "未设置"
+            }
+            readOnly
+            className={`cursor-pointer my-2 ${activeField === "selectionTranslate" ? "border-primary ring-2 ring-primary/20" : ""}`}
+            onClick={() => setActiveField("selectionTranslate")}
+            onKeyDown={(e) => handleKeyDown(e, "selectionTranslate")}
+            onBlur={() => handleBlur("selectionTranslate")}
+          />
+          {activeField === "selectionTranslate" && error && (
+            <p className="text-sm text-destructive mt-1">{error}</p>
+          )}
+          <ItemDescription>
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <span>点击输入框开始录制快捷键。支持组合键，如</span>
+              <div className="flex gap-1">
+                <Kbd>⌃</Kbd>
+                <span>+</span>
+                <Kbd>S</Kbd>
               </div>
             </div>
           </ItemDescription>

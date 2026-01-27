@@ -93,22 +93,7 @@ export default function Translate() {
           ))
         ) : submittedText && activeServices.length === 0 ? (
           <div className="relative flex min-h-[150px] flex-col rounded-md border bg-muted/20 p-4 justify-center items-center text-muted-foreground">
-            {/* Fallback local mock if no services active, or just show message */}
-            <TranslationItem
-              key="default"
-              service={{
-                id: "default",
-                name: "本地模拟",
-                enabled: true,
-                apiKey: "",
-                model: "default",
-              }}
-              text={submittedText}
-              sourceLang={effectiveSourceLang}
-              targetLang={targetLang}
-              sourceLangLabel={effectiveSourceLangLabel || ""}
-              targetLangLabel={targetLangLabel || ""}
-            />
+            未启用任何翻译服务，请在“服务”设置中启用。
           </div>
         ) : (
           <div className="relative flex min-h-[150px] flex-col rounded-md border bg-muted/20 p-4 justify-center items-center text-muted-foreground">
