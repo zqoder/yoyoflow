@@ -32,7 +32,10 @@ export default function Shortcuts() {
       mainInputRef.current.focus();
     } else if (activeField === "inputTranslate" && translateInputRef.current) {
       translateInputRef.current.focus();
-    } else if (activeField === "selectionTranslate" && selectionInputRef.current) {
+    } else if (
+      activeField === "selectionTranslate" &&
+      selectionInputRef.current
+    ) {
       selectionInputRef.current.focus();
     }
   }, [activeField]);
@@ -127,7 +130,7 @@ export default function Shortcuts() {
       </Item>
 
       {/* Input Translate Shortcut */}
-      <Item variant="outline" className="bg-muted">
+      <Item variant="outline" className="bg-muted/50">
         <ItemContent>
           <ItemTitle>输入翻译</ItemTitle>
           <Input
@@ -160,7 +163,7 @@ export default function Shortcuts() {
         </ItemContent>
       </Item>
       {/* Selection Translate Shortcut */}
-      <Item variant="outline" className="bg-muted">
+      <Item variant="outline" className="bg-muted/50">
         <ItemContent>
           <ItemTitle>划词翻译</ItemTitle>
           <Input

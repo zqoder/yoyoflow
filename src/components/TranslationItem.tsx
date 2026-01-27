@@ -1,8 +1,21 @@
 import ky from "ky";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Volume2, Check, RotateCw, ChevronDown, ChevronUp } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import {
+  Copy,
+  Volume2,
+  Check,
+  RotateCw,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { ServiceConfig } from "@/store/services";
 
 interface TranslationItemProps {
@@ -13,6 +26,22 @@ interface TranslationItemProps {
   sourceLangLabel: string;
   targetLangLabel: string;
   className?: string;
+}
+
+interface WordDefinition {
+  pos: string;
+  meaning: string;
+  example: {
+    source: string;
+    target: string;
+  };
+}
+
+interface TranslationResult {
+  phonetic?: string;
+  definitions?: WordDefinition[];
+  translation: string;
+  contextual_analysis?: string;
 }
 
 export function TranslationItem({
@@ -38,7 +67,6 @@ export function TranslationItem({
       setTranslatedText("");
       return;
     }
-    // ... existing translate logic ...
 
     const translate = async () => {
       // Cancel previous request
@@ -66,12 +94,24 @@ export function TranslationItem({
                 messages: [
                   {
                     role: "system",
-                    content: `你是一个专业的翻译助手。请将用户输入的文本从${sourceLangLabel}翻译成${targetLangLabel}。
-请注意：
-1. 仅输出翻译后的结果，不要包含任何解释、寒暄或额外的文本。
-2. 保持原文的语气和格式。
-3. 如果遇到驼峰命名法或者下划线连接的专有名词，请拆分翻译。
-4. 如果遇到无法翻译的专有名词，请保留原文。`,
+                    content: `You are a professional multilingual translation engine. translate the text from ${sourceLangLabel} to ${targetLangLabel}.
+RULES:
+1. Only output the translated text, without any explanations, greetings, or extra text.
+2. Preserve the original tone and format.
+3. If encountering camelCase or snake_case words, translate each part separately.
+4. If encountering unknown words, keep them as-is.
+5. For single words: provide translation, phonetics, definitions grouped by part of speech, and example sentences.  
+6. For sentences/phrases:  provide translation only.  
+7. All responses must be in Simplified Chinese language.  
+8. For English, Use American phonetics for phonetic symbols. 
+9. For Chinese, Use standard Pinyin for phonetic symbols (with tone marks) 
+10. For other languages, use their native phonetic systems for phonetic symbols
+11. Do not output languages other than those requested 
+12. Consider context when analyzing words.  
+13. Output raw JSON without markdown code blocks. 
+14. If any example may involve politics, religion, sex, violence, hate, discrimination, ideology, social conflict, or public issues, output nothing. No substitution. No explanation. No expansion. 
+15. SINGLE WORD OUTPUT: {"phonetic": "/həˈləʊ/", "definitions": [{"pos": "excl.", "meaning": "Simplified Chinese translation for current pos", "example": {"source": "Hello, how are you today?", "target": "Simplified Chinese example"}}],  "translation": "translation in Simplified Chinese",  "contextual_analysis": "contextual analysis use Simplified Chinese language"}
+16. SENTENCE/PHRASE OUTPUT: {"translation": "translation in Simplified Chinese"}`,
                   },
                   {
                     role: "user",
@@ -99,7 +139,6 @@ export function TranslationItem({
             for (const line of lines) {
               if (line.startsWith("data:")) {
                 const dataStr = line.slice(5);
-                // if (dataStr === "[DONE]") continue;
 
                 try {
                   const data = JSON.parse(dataStr);
@@ -107,11 +146,9 @@ export function TranslationItem({
                   // Handle Anthropic-style stream events
                   switch (data.type) {
                     case "message_start":
-                      // Message started, optionally handle message metadata
                       break;
 
                     case "content_block_start":
-                      // Content block started
                       if (data.content_block?.text) {
                         setTranslatedText(
                           (prev) => prev + data.content_block.text,
@@ -120,7 +157,6 @@ export function TranslationItem({
                       break;
 
                     case "content_block_delta":
-                      // Content updates
                       if (
                         data.delta?.type === "text_delta" &&
                         data.delta?.text
@@ -130,19 +166,16 @@ export function TranslationItem({
                       break;
 
                     case "message_delta":
-                      // Message updates (e.g. stop reason)
                       break;
 
                     case "message_stop":
-                      // Message finished
                       break;
 
                     case "ping":
-                      // Keep-alive
                       break;
 
                     default:
-                      // Fallback for OpenAI-style format (if API returns mixed formats)
+                      // Fallback for OpenAI-style format
                       if (data.choices?.[0]?.delta?.content) {
                         setTranslatedText(
                           (prev) => prev + data.choices[0].delta.content,
@@ -151,7 +184,7 @@ export function TranslationItem({
                       break;
                   }
                 } catch (e) {
-                  console.warn("Failed to parse SSE data:", e);
+                  // Ignore parse errors for partial chunks
                 }
               }
             }
@@ -161,7 +194,9 @@ export function TranslationItem({
           await new Promise((resolve) => setTimeout(resolve, 500));
           if (!abortController.signal.aborted) {
             setTranslatedText(
-              `[${service.name}] [${sourceLangLabel} -> ${targetLangLabel}] ${text}`,
+              JSON.stringify({
+                translation: `[${service.name}] ${text}`,
+              }),
             );
           }
         }
@@ -186,10 +221,57 @@ export function TranslationItem({
     };
   }, [text, service, sourceLangLabel, targetLangLabel, retryCount]);
 
-  const handleCopy = async () => {
-    if (!translatedText) return;
+  const parsedResult = useMemo<TranslationResult | null>(() => {
+    if (!translatedText) return null;
+    const trimmed = translatedText.trim();
+
     try {
-      await navigator.clipboard.writeText(translatedText);
+      if (trimmed.startsWith("{")) {
+        // Try parsing full JSON first
+        try {
+          return JSON.parse(trimmed);
+        } catch (e) {
+          // If failed, try partial parsing using regex
+          const partial: TranslationResult = { translation: "" };
+
+          // Extract translation
+          const translationMatch = trimmed.match(
+            /"translation"\s*:\s*"((?:[^"\\]|\\.)*)/,
+          );
+          if (translationMatch) {
+            partial.translation = translationMatch[1];
+          }
+
+          // Extract phonetic
+          const phoneticMatch = trimmed.match(
+            /"phonetic"\s*:\s*"((?:[^"\\]|\\.)*)/,
+          );
+          if (phoneticMatch) {
+            partial.phonetic = phoneticMatch[1];
+          }
+
+          // Extract contextual_analysis
+          const contextMatch = trimmed.match(
+            /"contextual_analysis"\s*:\s*"((?:[^"\\]|\\.)*)/,
+          );
+          if (contextMatch) {
+            partial.contextual_analysis = contextMatch[1];
+          }
+
+          // Return partial result if any field found, otherwise return empty translation to show loading/empty state instead of raw JSON
+          return partial;
+        }
+      }
+      return { translation: translatedText };
+    } catch (e) {
+      return { translation: translatedText };
+    }
+  }, [translatedText]);
+
+  const handleCopy = async () => {
+    if (!parsedResult?.translation) return;
+    try {
+      await navigator.clipboard.writeText(parsedResult.translation);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -198,68 +280,35 @@ export function TranslationItem({
   };
 
   const handleSpeak = async () => {
-    if (!translatedText) return;
+    const textToSpeak = parsedResult?.phonetic
+      ? text
+      : parsedResult?.translation;
 
-    if (false) {
-      if (isSpeaking) return;
-      setIsSpeaking(true);
-      try {
-        const response = await ky.post(
-          "https://api.siliconflow.cn/v1/audio/speech",
-          {
-            headers: {
-              Authorization: `Bearer ${service.apiKey}`,
-              "Content-Type": "application/json",
-            },
-            json: {
-              model: "FunAudioLLM/SenseVoiceSmall",
-              input: translatedText,
-            },
-            timeout: 60000,
-          },
-        );
+    if (!textToSpeak) return;
 
-        const blob = await response.blob();
-        const audioUrl = URL.createObjectURL(blob);
-        const audio = new Audio(audioUrl);
-
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-        };
-
-        audio.onerror = (e) => {
-          console.error("Audio playback error:", e);
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-        };
-
-        await audio.play();
-      } catch (err) {
-        console.error("Failed to speak text via API: ", err);
-        setIsSpeaking(false);
-        // Fallback to browser TTS if API fails?
-        // For now, just log error as user explicitly requested API usage
-      }
-    } else {
-      // Fallback for other services
-      const utterance = new SpeechSynthesisUtterance(translatedText);
-      utterance.lang = targetLang;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
-    }
+    // ... existing speak logic using textToSpeak ...
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = targetLang;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
   };
 
   const isSmall = className?.includes("text-sm");
 
   return (
     <Card className={`bg-muted/20 ${className || ""}`}>
-      <CardHeader className={`py-2 px-4 space-y-0 ${!isCollapsed ? "border-b" : ""} flex flex-row items-center justify-between ${isSmall ? "py-1 px-3" : ""}`}>
-        <CardTitle className={`text-sm font-medium text-muted-foreground ${isSmall ? "text-xs" : ""}`}>
-          {service.name}
-        </CardTitle>
+      <CardHeader
+        className={`py-2 px-4 space-y-0 ${!isCollapsed ? "border-b" : ""} flex flex-row items-center justify-between ${isSmall ? "py-1 px-3" : ""}`}
+      >
+        <div className="flex items-center gap-2">
+          <CardTitle
+            className={`text-sm font-medium text-muted-foreground ${isSmall ? "text-xs" : ""}`}
+          >
+            {service.name}
+          </CardTitle>
+        </div>
         <div className="flex items-center gap-1">
           {!!error && (
             <Button
@@ -274,6 +323,43 @@ export function TranslationItem({
             >
               <RotateCw className="h-3 w-3" />
             </Button>
+          )}
+          {!isLoading && !error && parsedResult && parsedResult.translation && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-6 w-6 ${isSmall ? "h-5 w-5" : ""}`}
+                onClick={handleSpeak}
+                disabled={isSpeaking}
+                title="朗读"
+              >
+                {isSpeaking ? (
+                  <RotateCw
+                    className={`h-3 w-3 animate-spin ${isSmall ? "h-2.5 w-2.5" : ""}`}
+                  />
+                ) : (
+                  <Volume2
+                    className={`h-3 w-3 ${isSmall ? "h-2.5 w-2.5" : ""}`}
+                  />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-6 w-6 ${isSmall ? "h-5 w-5" : ""}`}
+                onClick={handleCopy}
+                title="复制"
+              >
+                {copied ? (
+                  <Check
+                    className={`h-3 w-3 text-green-500 ${isSmall ? "h-2.5 w-2.5" : ""}`}
+                  />
+                ) : (
+                  <Copy className={`h-3 w-3 ${isSmall ? "h-2.5 w-2.5" : ""}`} />
+                )}
+              </Button>
+            </div>
           )}
           <Button
             variant="ghost"
@@ -291,52 +377,88 @@ export function TranslationItem({
         </div>
       </CardHeader>
       {!isCollapsed && (
-        <CardContent className={`p-4 relative min-h-[50px] ${isSmall ? "p-3" : ""}`}>
-        {isLoading && !translatedText ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            <RotateCw className="h-4 w-4 animate-spin mr-2" />
-            正在翻译...
-          </div>
-        ) : error ? (
-          <div className="text-destructive text-sm">
-            翻译失败: {error instanceof Error ? error.message : "未知错误"}
-          </div>
-        ) : (
-          <div className={`whitespace-pre-wrap ${isSmall ? "text-sm" : "text-base"}`}>{translatedText}</div>
-        )}
+        <>
+          <CardContent className={`p-4 min-h-[50px] ${isSmall ? "p-3" : ""}`}>
+            {isLoading && !translatedText ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                <RotateCw className="h-4 w-4 animate-spin mr-2" />
+                正在翻译...
+              </div>
+            ) : error ? (
+              <div className="text-destructive text-sm">
+                翻译失败: {error instanceof Error ? error.message : "未知错误"}
+              </div>
+            ) : parsedResult ? (
+              <div className="flex flex-col gap-2">
+                {/* Main Translation & Phonetic */}
+                <div>
+                  <div className="flex items-baseline gap-2">
+                    <span
+                      className={`font-medium ${isSmall ? "text-sm" : "text-lg"}`}
+                    >
+                      {parsedResult.translation}
+                    </span>
+                    {parsedResult?.definitions &&
+                      parsedResult.definitions?.length > 0 && (
+                        <span
+                          className={`font-medium ${isSmall ? "text-sm" : "text-lg"}`}
+                        >
+                          {text}
+                        </span>
+                      )}
+                    {parsedResult.phonetic && (
+                      <span className="text-muted-foreground font-mono text-sm">
+                        {parsedResult.phonetic}
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-        {!isLoading && !error && translatedText && (
-          <div className="absolute bottom-2 right-2 flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-8 w-8 ${isSmall ? "h-6 w-6" : ""}`}
-              onClick={handleSpeak}
-              disabled={isSpeaking}
-              title="朗读"
-            >
-              {isSpeaking ? (
-                <RotateCw className={`h-4 w-4 animate-spin ${isSmall ? "h-3 w-3" : ""}`} />
-              ) : (
-                <Volume2 className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-8 w-8 ${isSmall ? "h-6 w-6" : ""}`}
-              onClick={handleCopy}
-              title="复制"
-            >
-              {copied ? (
-                <Check className={`h-4 w-4 text-green-500 ${isSmall ? "h-3 w-3" : ""}`} />
-              ) : (
-                <Copy className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`} />
-              )}
-            </Button>
-          </div>
-        )}
-        </CardContent>
+                {/* Definitions (Single Word Mode) */}
+                {parsedResult.definitions &&
+                  parsedResult.definitions.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {parsedResult.definitions.map((def, index) => (
+                        <div
+                          key={index}
+                          className="flex flex-col gap-1 text-sm"
+                        >
+                          <div className="flex gap-2">
+                            <span className="font-semibold italic text-muted-foreground min-w-[3em]">
+                              {def.pos}
+                            </span>
+                            <span>{def.meaning}</span>
+                          </div>
+                          {def.example && (
+                            <div className="pl-[calc(3em+0.5rem)] text-muted-foreground text-xs flex flex-col gap-0.5">
+                              <span>{def.example.source}</span>
+                              <span>{def.example.target}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+              </div>
+            ) : (
+              // Fallback while streaming/parsing
+              <div
+                className={`whitespace-pre-wrap ${isSmall ? "text-sm" : "text-base"}`}
+              >
+                {translatedText}
+              </div>
+            )}
+          </CardContent>
+          {/* Contextual Analysis Footer */}
+          {parsedResult?.contextual_analysis && (
+            <CardFooter className={`px-4 pb-4 ${isSmall ? "p-3" : ""}`}>
+              <div className="w-full text-xs text-muted-foreground bg-muted/50 rounded">
+                <span className="font-semibold">语境分析：</span>
+                {parsedResult.contextual_analysis}
+              </div>
+            </CardFooter>
+          )}
+        </>
       )}
     </Card>
   );
