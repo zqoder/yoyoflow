@@ -1,11 +1,15 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use base64::{engine::general_purpose, Engine as _};
 use enigo::{Enigo, Key, Keyboard, Settings};
+use std::fs;
+use std::process::Command;
 use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::{Emitter, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use uuid::Uuid;
 
 mod commands;
 
@@ -13,6 +17,7 @@ struct AppState {
     main_shortcut: Mutex<String>,
     input_translate_shortcut: Mutex<String>,
     selection_translate_shortcut: Mutex<String>,
+    screenshot_translate_shortcut: Mutex<String>,
 }
 
 #[tauri::command]
@@ -21,6 +26,7 @@ fn update_shortcuts(
     main_shortcut: String,
     input_translate_shortcut: String,
     selection_translate_shortcut: String,
+    screenshot_translate_shortcut: String,
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
     let shortcut_manager = app.global_shortcut();
@@ -32,6 +38,7 @@ fn update_shortcuts(
     *state.main_shortcut.lock().unwrap() = main_shortcut.clone();
     *state.input_translate_shortcut.lock().unwrap() = input_translate_shortcut.clone();
     *state.selection_translate_shortcut.lock().unwrap() = selection_translate_shortcut.clone();
+    *state.screenshot_translate_shortcut.lock().unwrap() = screenshot_translate_shortcut.clone();
 
     // Register main shortcut
     if !main_shortcut.is_empty() {
@@ -54,6 +61,13 @@ fn update_shortcuts(
         }
     }
 
+    // Register screenshot translate shortcut
+    if !screenshot_translate_shortcut.is_empty() {
+        if let Ok(shortcut) = Shortcut::from_str(&screenshot_translate_shortcut) {
+            let _ = shortcut_manager.register(shortcut);
+        }
+    }
+
     Ok(())
 }
 
@@ -64,8 +78,10 @@ pub fn run() {
             main_shortcut: Mutex::new("CommandOrControl+Shift+U".to_string()),
             input_translate_shortcut: Mutex::new("Control+A".to_string()),
             selection_translate_shortcut: Mutex::new("Control+D".to_string()),
+            screenshot_translate_shortcut: Mutex::new("Control+S".to_string()),
         })
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_http::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -74,6 +90,7 @@ pub fn run() {
                         let main_s = state.main_shortcut.lock().unwrap();
                         let input_s = state.input_translate_shortcut.lock().unwrap();
                         let selection_s = state.selection_translate_shortcut.lock().unwrap();
+                        let screenshot_s = state.screenshot_translate_shortcut.lock().unwrap();
 
                         if let Ok(s) = Shortcut::from_str(&main_s) {
                             if shortcut == &s {
@@ -96,6 +113,62 @@ pub fn run() {
                                     let _ = window.show();
                                     let _ = window.set_focus();
                                 }
+                            }
+                        }
+
+                        if let Ok(s) = Shortcut::from_str(&screenshot_s) {
+                            if shortcut == &s {
+                                println!("Screenshot translate shortcut pressed");
+                                let app_handle = app.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let filename = format!("screenshot_{}.png", Uuid::new_v4());
+                                    let tmp_file = std::env::temp_dir().join(filename);
+                                    let tmp_path = tmp_file.to_string_lossy().to_string();
+
+                                    // Use screencapture for macOS
+                                    #[cfg(target_os = "macos")]
+                                    let output = Command::new("screencapture")
+                                        .arg("-i") // interactive
+                                        .arg(&tmp_path)
+                                        .output();
+
+                                    // TODO: Add Windows implementation if needed
+
+                                    #[cfg(target_os = "macos")]
+                                    match output {
+                                        Ok(_) => {
+                                            if tmp_file.exists() {
+                                                if let Ok(bytes) = fs::read(&tmp_file) {
+                                                    let base64_str =
+                                                        general_purpose::STANDARD.encode(&bytes);
+                                                    let data_url = format!(
+                                                        "data:image/png;base64,{}",
+                                                        base64_str
+                                                    );
+
+                                                    // Emit event to frontend
+                                                    if let Some(window) =
+                                                        app_handle.get_webview_window("shortcut_translate")
+                                                    {
+                                                        if let Ok(true) = window.is_minimized() {
+                                                            let _ = window.unminimize();
+                                                        }
+                                                        let _ = window.show();
+                                                        let _ = window.set_focus();
+                                                        let _ = window.emit(
+                                                            "screenshot-captured",
+                                                            data_url,
+                                                        );
+                                                    }
+
+                                                    // Cleanup
+                                                    let _ = fs::remove_file(tmp_file);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => eprintln!("Screenshot failed: {}", e),
+                                    }
+                                });
                             }
                         }
 
@@ -152,8 +225,9 @@ pub fn run() {
             let main_shortcut = state.main_shortcut.lock().unwrap().clone();
             let input_shortcut = state.input_translate_shortcut.lock().unwrap().clone();
             let selection_shortcut = state.selection_translate_shortcut.lock().unwrap().clone();
+            let screenshot_shortcut = state.screenshot_translate_shortcut.lock().unwrap().clone();
 
-            let main_item = MenuItem::with_id(app, "main", "主窗口", true, Some(&main_shortcut))?;
+            let main_item = MenuItem::with_id(app, "main", "偏好设置", true, Some(&main_shortcut))?;
             let input_item =
                 MenuItem::with_id(app, "input", "输入翻译", true, Some(&input_shortcut))?;
             let selection_item = MenuItem::with_id(
@@ -163,6 +237,13 @@ pub fn run() {
                 true,
                 Some(&selection_shortcut),
             )?;
+            let screenshot_item = MenuItem::with_id(
+                app,
+                "screenshot",
+                "截图翻译",
+                true,
+                Some(&screenshot_shortcut),
+            )?;
 
             let separator = PredefinedMenuItem::separator(app)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -171,7 +252,9 @@ pub fn run() {
                 app,
                 &[
                     &main_item,
+                    &separator,
                     &input_item,
+                    &screenshot_item,
                     &selection_item,
                     &separator,
                     &quit_item,
@@ -201,6 +284,13 @@ pub fn run() {
                         if let Some(window) = app.get_webview_window("shortcut_translate") {
                             let _ = window.show();
                             let _ = window.set_focus();
+                        }
+                    }
+                    "screenshot" => {
+                        if let Some(window) = app.get_webview_window("shortcut_translate") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                            let _ = window.emit("screenshot-translate", ());
                         }
                     }
                     "quit" => {

@@ -11,11 +11,20 @@
     "core:window:allow-start-dragging",
     "core:window:allow-hide",
     "core:window:allow-set-always-on-top",
+    "core:window:allow-toggle-maximize",
     "global-shortcut:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-is-registered",
     "global-shortcut:allow-unregister",
     "clipboard-manager:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://dict.youdao.com/*"
+        }
+      ]
+    },
     "opener:default",
     "store:default"
   ]

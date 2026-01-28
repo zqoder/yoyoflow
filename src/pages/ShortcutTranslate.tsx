@@ -2,16 +2,18 @@ import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { X, Pin } from "lucide-react";
+import { X, Pin, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ControlBar } from "@/components/ControlBar";
 import { LANGUAGES, detectLanguage } from "@/lib/languages";
 import { useServiceStore } from "@/store/services";
 import { TranslationItem } from "@/components/TranslationItem";
+import { extractTextFromImage } from "@/services/ocr";
 
 export default function ShortcutTranslate() {
   const [text, setText] = useState("");
   const [submittedText, setSubmittedText] = useState("");
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("zh");
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -20,7 +22,9 @@ export default function ShortcutTranslate() {
 
   const services = useServiceStore((state) => state.services);
   const refreshServices = useServiceStore((state) => state.refreshServices);
-  const activeServices = services.filter((s) => s.enabled);
+  const activeServices = services.filter(
+    (s) => s.enabled && s.type === "text-translation",
+  );
 
   const togglePin = async () => {
     const newState = !isPinned;
@@ -55,10 +59,10 @@ export default function ShortcutTranslate() {
       ? detectLanguage(submittedText)
       : sourceLang;
   const effectiveSourceLangLabel =
-    LANGUAGES.find((l) => l.value === effectiveSourceLang)?.label ||
+    LANGUAGES.find((l) => l.value === effectiveSourceLang)?.prompt ||
     effectiveSourceLang;
   const targetLangLabel =
-    LANGUAGES.find((l) => l.value === targetLang)?.label || targetLang;
+    LANGUAGES.find((l) => l.value === targetLang)?.prompt || targetLang;
 
   const handleClose = async () => {
     setText("");
@@ -86,7 +90,7 @@ export default function ShortcutTranslate() {
     const unlistenFocus = getCurrentWindow().listen("tauri://focus", () => {
       inputRef.current?.focus();
       // Select all text when refocused
-      inputRef.current?.select();
+      // inputRef.current?.select();
       // Refresh services configuration
       refreshServices();
     });
@@ -118,12 +122,49 @@ export default function ShortcutTranslate() {
       },
     );
 
+    // Listen for screenshot captured event
+    const unlistenScreenshot = getCurrentWindow().listen<string>(
+      "screenshot-captured",
+      async (event) => {
+        const imageBase64 = event.payload;
+        if (!imageBase64) return;
+
+        setIsOcrLoading(true);
+        setText("正在提取文字...");
+        setSubmittedText("");
+
+        // Find OCR service
+        const ocrService = services.find(
+          (s) => s.enabled && s.type === "text-recognition",
+        );
+
+        if (!ocrService) {
+          setText("未启用 OCR 服务，请在设置中配置并启用。");
+          setIsOcrLoading(false);
+          return;
+        }
+
+        await extractTextFromImage(ocrService, imageBase64, {
+          onSuccess: (extractedText) => {
+            setText(extractedText);
+            setSubmittedText(extractedText);
+            setIsOcrLoading(false);
+          },
+          onError: (err) => {
+            setText(`OCR 失败: ${err.message}`);
+            setIsOcrLoading(false);
+          },
+        });
+      },
+    );
+
     return () => {
       unlistenFocus.then((f) => f());
       unlistenBlur.then((f) => f());
       unlistenSelection.then((f) => f());
+      unlistenScreenshot.then((f) => f());
     };
-  }, []);
+  }, [services]);
 
   // Auto resize textarea based on content
   useEffect(() => {
@@ -183,6 +224,12 @@ export default function ShortcutTranslate() {
             }}
           />
           <div className="absolute bottom-0 right-3 text-xs text-muted-foreground flex gap-3 pointer-events-none">
+            {isOcrLoading && (
+              <div className="flex items-center gap-1 text-primary animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>OCR 识别中...</span>
+              </div>
+            )}
             {sourceLang === "auto" && detectedLangLabel && (
               <span>检测为: {detectedLangLabel}</span>
             )}

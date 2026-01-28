@@ -12,12 +12,17 @@ import {
 import { useServiceStore, AVAILABLE_MODELS } from "@/store/services";
 
 export default function Service() {
-  const { services, updateService } = useServiceStore();
+  const { services, updateService, activeServiceType } = useServiceStore();
+
+  const filteredServices = services.filter(
+    (s) => s.type === activeServiceType,
+  );
 
   return (
     <div className="grid gap-4 p-4 grid-cols-1">
-      {services.map((service) => (
-        <Card key={service.id}>
+      {filteredServices.length > 0 ? (
+        filteredServices.map((service) => (
+          <Card key={service.id}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base font-medium">
               {service.name}
@@ -70,7 +75,17 @@ export default function Service() {
             </div>
           </CardFooter>
         </Card>
-      ))}
+        ))
+      ) : (
+        <div className="flex flex-col items-center justify-center h-40 text-muted-foreground text-sm">
+          暂无{activeServiceType === "text-translation"
+            ? "翻译"
+            : activeServiceType === "text-recognition"
+              ? "识别"
+              : "语音"}
+          服务
+        </div>
+      )}
     </div>
   );
 }

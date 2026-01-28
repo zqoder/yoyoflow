@@ -1,14 +1,13 @@
-
 export const LANGUAGES = [
   { value: "auto", label: "自动检测" },
-  { value: "zh", label: "中文" },
-  { value: "en", label: "英语" },
-  { value: "ja", label: "日语" },
-  { value: "ko", label: "韩语" },
-  { value: "fr", label: "法语" },
-  { value: "de", label: "德语" },
-  { value: "es", label: "西班牙语" },
-  { value: "ru", label: "俄语" },
+  { value: "zh", label: "中文", prompt: "Simplified Chinese" },
+  { value: "en", label: "英语", prompt: "English" },
+  { value: "ja", label: "日语", prompt: "Japanese" },
+  { value: "ko", label: "韩语", prompt: "Korean" },
+  { value: "fr", label: "法语", prompt: "French" },
+  { value: "de", label: "德语", prompt: "German" },
+  { value: "es", label: "西班牙语", prompt: "Spanish" },
+  { value: "ru", label: "俄语", prompt: "Russian" },
 ];
 
 export const detectLanguage = (text: string) => {

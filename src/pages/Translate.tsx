@@ -11,7 +11,9 @@ export default function Translate() {
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("zh");
   const services = useServiceStore((state) => state.services);
-  const activeServices = services.filter((s) => s.enabled);
+  const activeServices = services.filter(
+    (s) => s.enabled && s.type === "text-translation",
+  );
 
   const handleSwapLanguages = () => {
     if (sourceLang === "auto") {
@@ -39,10 +41,10 @@ export default function Translate() {
       ? detectLanguage(submittedText)
       : sourceLang;
   const effectiveSourceLangLabel =
-    LANGUAGES.find((l) => l.value === effectiveSourceLang)?.label ||
+    LANGUAGES.find((l) => l.value === effectiveSourceLang)?.prompt ||
     effectiveSourceLang;
   const targetLangLabel =
-    LANGUAGES.find((l) => l.value === targetLang)?.label || targetLang;
+    LANGUAGES.find((l) => l.value === targetLang)?.prompt || targetLang;
 
   return (
     <div className="flex h-full w-full flex-col gap-4 p-4">
