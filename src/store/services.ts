@@ -15,6 +15,7 @@ export interface ServiceConfig {
   apiKey: string;
   model: string;
   icon: string;
+  serviceUrl: string;
 }
 
 export const AVAILABLE_MODELS: Record<string, string[]> = {
@@ -32,6 +33,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     apiKey: "",
     model: "Qwen/Qwen3-8B",
     icon: "siliconflow.png",
+    serviceUrl: "https://cloud.siliconflow.cn/me/account/ak",
   },
   {
     id: "glm",
@@ -41,6 +43,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     apiKey: "",
     model: "general_translation",
     icon: "glm.png",
+    serviceUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
   },
   {
     id: "siliconflow_ocr",
@@ -50,6 +53,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     apiKey: "",
     model: "THUDM/GLM-4.1V-9B-Thinking",
     icon: "siliconflow.png",
+    serviceUrl: "https://cloud.siliconflow.cn/me/account/ak",
   },
 ];
 

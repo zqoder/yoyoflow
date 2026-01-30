@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "yoyoflow",
+  "productName": "YoYoFlow",
   "version": "0.1.0",
   "identifier": "com.zhaoqi.yoyoflow",
   "build": {

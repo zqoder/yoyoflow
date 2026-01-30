@@ -1,3 +1,6 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -23,7 +26,7 @@ export default function Service() {
       {filteredServices.length > 0 ? (
         filteredServices.map((service) => (
           <Card key={service.id}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2">
               <CardTitle className="text-base font-medium flex items-center gap-2">
                 <img
                   src={
@@ -35,6 +38,17 @@ export default function Service() {
                   className="h-4 w-4"
                 />
                 {service.name}
+                {service.serviceUrl && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-4 w-4 text-muted-foreground hover:text-primary"
+                    onClick={() => openUrl(service.serviceUrl)}
+                    title="获取 API Key"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                )}
               </CardTitle>
               <Switch
                 checked={service.enabled}
