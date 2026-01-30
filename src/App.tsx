@@ -36,9 +36,28 @@ function App() {
           <Route path="/" element={<Translate />} />
           <Route path="/service" element={<Service />} />
           <Route path="/shortcuts" element={<Shortcuts />} />
-          <Route path="/vocabulary" element={<div>生词本组件内容</div>} />
-          <Route path="/history" element={<div>历史记录组件内容</div>} />
-          <Route path="/settings" element={<div>通用设置组件内容</div>} />
+          <Route
+            path="/vocabulary"
+            element={
+              <div className="text-center text-gray-500 pt-8">生词本待开发</div>
+            }
+          />
+          <Route
+            path="/history"
+            element={
+              <div className="text-center text-gray-500 pt-8">
+                历史记录待开发
+              </div>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <div className="text-center text-gray-500 pt-8">
+                通用设置待开发
+              </div>
+            }
+          />
         </Route>
       </Routes>
     </HashRouter>

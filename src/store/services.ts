@@ -14,6 +14,7 @@ export interface ServiceConfig {
   enabled: boolean;
   apiKey: string;
   model: string;
+  icon: string;
 }
 
 export const AVAILABLE_MODELS: Record<string, string[]> = {
@@ -30,6 +31,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     enabled: false,
     apiKey: "",
     model: "Qwen/Qwen3-8B",
+    icon: "siliconflow.png",
   },
   {
     id: "glm",
@@ -38,6 +40,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     enabled: false,
     apiKey: "",
     model: "general_translation",
+    icon: "glm.png",
   },
   {
     id: "siliconflow_ocr",
@@ -46,6 +49,7 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     enabled: false,
     apiKey: "",
     model: "THUDM/GLM-4.1V-9B-Thinking",
+    icon: "siliconflow.png",
   },
 ];
 

@@ -19,6 +19,8 @@ import { ServiceConfig } from "@/store/services";
 import { translateText } from "@/services/translation";
 import { speakText } from "@/services/tts";
 
+const ICONS = import.meta.glob("@/assets/*.png", { eager: true, as: "url" });
+
 interface TranslationItemProps {
   service: ServiceConfig;
   text: string;
@@ -231,8 +233,17 @@ export function TranslationItem({
       >
         <div className="flex items-center gap-2">
           <CardTitle
-            className={`text-sm font-medium text-muted-foreground ${isSmall ? "text-xs" : ""}`}
+            className={`text-sm font-medium text-muted-foreground flex items-center gap-2 ${isSmall ? "text-xs" : ""}`}
           >
+            <img
+              src={
+                Object.entries(ICONS).find(([path]) =>
+                  path.endsWith(service.icon),
+                )?.[1] || ""
+              }
+              alt={service.name}
+              className={`h-4 w-4 ${isSmall ? "h-3 w-3" : ""}`}
+            />
             {service.name}
           </CardTitle>
         </div>
