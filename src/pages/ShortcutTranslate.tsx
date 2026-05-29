@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useShallow } from "zustand/shallow";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,11 @@ import { cn } from "@/lib/utils";
 import { ControlBar } from "@/components/ControlBar";
 import { LANGUAGES, detectLanguage } from "@/lib/languages";
 import { useServiceStore } from "@/store/services";
+import { useVocabularyStore } from "@/store/vocabulary";
+import { useHistoryStore } from "@/store/history";
 import { TranslationItem } from "@/components/TranslationItem";
 import { extractTextFromImage } from "@/services/ocr";
+import type { TranslationResult, VocabularyEntry } from "@/lib/types";
 
 export default function ShortcutTranslate() {
   const [text, setText] = useState("");
@@ -25,6 +29,20 @@ export default function ShortcutTranslate() {
   const activeServices = services.filter(
     (s) => s.enabled && s.type === "text-translation",
   );
+
+  const { isFavorited, addEntry, removeByKey } = useVocabularyStore(
+    useShallow((state) => ({
+      isFavorited: state.isFavorited,
+      addEntry: state.addEntry,
+      removeByKey: state.removeByKey,
+      version: state.version,
+    })),
+  );
+  const addHistory = useHistoryStore((state) => state.addEntry);
+
+  const historySavedRef = useRef(false);
+  const submittedTextRef = useRef(submittedText);
+  submittedTextRef.current = submittedText;
 
   const togglePin = async () => {
     const newState = !isPinned;
@@ -45,6 +63,7 @@ export default function ShortcutTranslate() {
 
   const handleTranslate = () => {
     if (!text.trim()) return;
+    historySavedRef.current = false;
     setSubmittedText(text);
   };
 
@@ -63,6 +82,36 @@ export default function ShortcutTranslate() {
     effectiveSourceLang;
   const targetLangLabel =
     LANGUAGES.find((l) => l.value === targetLang)?.prompt || targetLang;
+
+  const handleToggleFavorite = (entry: Omit<VocabularyEntry, "id" | "createdAt">) => {
+    if (isFavorited(entry.text, entry.sourceLang, entry.targetLang)) {
+      removeByKey(entry.text, entry.sourceLang, entry.targetLang);
+    } else {
+      addEntry({
+        ...entry,
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+      });
+    }
+  };
+
+  const handleFirstComplete = (result: TranslationResult, serviceName: string) => {
+    if (historySavedRef.current) return;
+    const currentText = submittedTextRef.current;
+    if (!currentText) return;
+    historySavedRef.current = true;
+    addHistory({
+      id: crypto.randomUUID(),
+      text: currentText,
+      translationResult: result,
+      sourceLang: effectiveSourceLang,
+      sourceLangLabel: effectiveSourceLangLabel || "",
+      targetLang,
+      targetLangLabel: targetLangLabel || "",
+      serviceName,
+      createdAt: Date.now(),
+    });
+  };
 
   const handleClose = async () => {
     setText("");
@@ -218,7 +267,8 @@ export default function ShortcutTranslate() {
             placeholder="输入要翻译的文本..."
             className="min-h-[50px] resize-none border-none shadow-none focus-visible:ring-0 px-0 py-0 pb-2 text-sm bg-transparent"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
                 handleTranslate();
               }
             }}
@@ -250,18 +300,24 @@ export default function ShortcutTranslate() {
 
         <div className="flex-1 p-3 overflow-y-auto flex flex-col gap-4 text-sm">
           {submittedText && activeServices.length > 0 ? (
-            activeServices.map((service) => (
-              <TranslationItem
-                key={service.id}
-                service={service}
-                text={submittedText}
-                sourceLang={effectiveSourceLang}
-                targetLang={targetLang}
-                sourceLangLabel={effectiveSourceLangLabel || ""}
-                targetLangLabel={targetLangLabel || ""}
-                className="text-sm"
-              />
-            ))
+            activeServices.map((service) => {
+              const fav = isFavorited(submittedText, effectiveSourceLang, targetLang);
+              return (
+                <TranslationItem
+                  key={service.id}
+                  service={service}
+                  text={submittedText}
+                  sourceLang={effectiveSourceLang}
+                  targetLang={targetLang}
+                  sourceLangLabel={effectiveSourceLangLabel || ""}
+                  targetLangLabel={targetLangLabel || ""}
+                  className="text-sm"
+                  isFavorited={fav}
+                  onToggleFavorite={handleToggleFavorite}
+                  onFirstComplete={handleFirstComplete}
+                />
+              );
+            })
           ) : submittedText && activeServices.length === 0 ? (
             <div className="text-center text-sm text-muted-foreground py-4">
               未启用任何翻译服务，请在“服务”设置中启用。

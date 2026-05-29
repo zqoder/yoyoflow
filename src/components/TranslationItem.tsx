@@ -13,11 +13,13 @@ import {
   RotateCw,
   ChevronDown,
   ChevronUp,
+  Star,
 } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ServiceConfig } from "@/store/services";
 import { translateText } from "@/services/translation";
 import { speakText } from "@/services/tts";
+import type { TranslationResult, VocabularyEntry } from "@/lib/types";
 
 const ICONS = import.meta.glob("@/assets/*.png", { eager: true, as: "url" });
 
@@ -29,31 +31,22 @@ interface TranslationItemProps {
   sourceLangLabel: string;
   targetLangLabel: string;
   className?: string;
-}
-
-interface WordDefinition {
-  pos: string;
-  meaning: string;
-  example: {
-    source: string;
-    target: string;
-  };
-}
-
-interface TranslationResult {
-  phonetic?: string;
-  definitions?: WordDefinition[];
-  translation: string;
-  contextual_analysis?: string;
+  isFavorited?: boolean;
+  onToggleFavorite?: (entry: Omit<VocabularyEntry, "id" | "createdAt">) => void;
+  onFirstComplete?: (result: TranslationResult, serviceName: string) => void;
 }
 
 export function TranslationItem({
   service,
   text,
+  sourceLang,
   targetLang,
   sourceLangLabel,
   targetLangLabel,
   className,
+  isFavorited,
+  onToggleFavorite,
+  onFirstComplete,
 }: TranslationItemProps) {
   const [copied, setCopied] = useState(false);
   const [translatedText, setTranslatedText] = useState("");
@@ -64,6 +57,18 @@ export function TranslationItem({
   const [retryCount, setRetryCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const onFirstCompleteRef = useRef(onFirstComplete);
+  useEffect(() => {
+    onFirstCompleteRef.current = onFirstComplete;
+  });
+
+  const onFirstCompleteCalledRef = useRef(false);
+  useEffect(() => {
+    onFirstCompleteCalledRef.current = false;
+  }, [text, sourceLangLabel, targetLangLabel]);
+
+  const prevLoadingRef = useRef(isLoading);
 
   useEffect(() => {
     if (!text.trim()) {
@@ -170,6 +175,21 @@ export function TranslationItem({
     }
   }, [translatedText]);
 
+  useEffect(() => {
+    const wasLoading = prevLoadingRef.current;
+    prevLoadingRef.current = isLoading;
+
+    if (
+      wasLoading &&
+      !isLoading &&
+      parsedResult?.translation &&
+      !onFirstCompleteCalledRef.current
+    ) {
+      onFirstCompleteCalledRef.current = true;
+      onFirstCompleteRef.current?.(parsedResult, service.name);
+    }
+  }, [isLoading, parsedResult, service.name]);
+
   const handleCopy = async () => {
     if (!parsedResult?.translation) return;
     try {
@@ -222,6 +242,22 @@ export function TranslationItem({
       utterance.onerror = () => setIsSpeaking(false);
       window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const handleFavorite = () => {
+    if (!parsedResult?.translation || !onToggleFavorite) return;
+    onToggleFavorite({
+      text,
+      translation: parsedResult.translation,
+      phonetic: parsedResult.phonetic,
+      definitions: parsedResult.definitions,
+      contextual_analysis: parsedResult.contextual_analysis,
+      sourceLang,
+      sourceLangLabel,
+      targetLang,
+      targetLangLabel,
+      serviceName: service.name,
+    });
   };
 
   const isSmall = className?.includes("text-sm");
@@ -297,6 +333,23 @@ export function TranslationItem({
                   <Copy className={`h-3 w-3 ${isSmall ? "h-2.5 w-2.5" : ""}`} />
                 )}
               </Button>
+              {onToggleFavorite && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-6 w-6 ${isSmall ? "h-5 w-5" : ""}`}
+                  onClick={handleFavorite}
+                  title={isFavorited ? "取消收藏" : "收藏"}
+                >
+                  {isFavorited ? (
+                    <Star
+                      className={`h-3 w-3 text-yellow-400 fill-current ${isSmall ? "h-2.5 w-2.5" : ""}`}
+                    />
+                  ) : (
+                    <Star className={`h-3 w-3 ${isSmall ? "h-2.5 w-2.5" : ""}`} />
+                  )}
+                </Button>
+              )}
             </div>
           )}
           <Button

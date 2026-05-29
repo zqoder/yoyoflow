@@ -93,7 +93,7 @@ export function ControlBar({
           size={isSmall ? "sm" : "sm"}
           className={isSmall ? "h-7 text-xs px-2" : ""}
         >
-          翻译(⌘+⏎)
+          翻译(⏎)
         </Button>
       )}
     </div>
