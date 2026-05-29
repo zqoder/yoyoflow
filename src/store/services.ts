@@ -20,11 +20,25 @@ export interface ServiceConfig {
 
 export const AVAILABLE_MODELS: Record<string, string[]> = {
   siliconflow: ["Qwen/Qwen3-8B"],
+  deepseek: ["deepseek-v4-flash", "deepseek-v4-pro"],
   glm: ["glm-4-flashx-250414", "glm-4.7-flash"],
-  siliconflow_ocr: ["THUDM/GLM-4.1V-9B-Thinking"],
+  siliconflow_ocr: [
+    "PaddlePaddle/PaddleOCR-VL-1.5",
+    "THUDM/GLM-4.1V-9B-Thinking",
+  ],
 };
 
 export const DEFAULT_SERVICES: ServiceConfig[] = [
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    type: "text-translation",
+    enabled: false,
+    apiKey: "",
+    model: "deepseek-v4-flash",
+    icon: "deepseek.png",
+    serviceUrl: "https://platform.deepseek.com/api_keys",
+  },
   {
     id: "siliconflow",
     name: "硅基流动",

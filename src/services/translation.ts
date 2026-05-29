@@ -116,15 +116,15 @@ RULES:
 2. Preserve the original tone and format.
 3. If encountering camelCase or snake_case words, translate each part separately.
 4. If encountering unknown words, keep them as-is.
-5. For single words: provide translation, phonetics, definitions grouped by part of speech, and example sentences.  
+5. For single words: provide translation, phonetics, definitions grouped by part of speech, and example sentences.
 6. For sentences/phrases:  provide translation only.
 7. All responses must be in Simplified ${targetLangLabel} language.
-8. For English, Use American phonetics for phonetic symbols. 
-9. For Chinese, Use standard Pinyin for phonetic symbols (with tone marks) 
+8. For English, Use American phonetics for phonetic symbols.
+9. For Chinese, Use standard Pinyin for phonetic symbols (with tone marks)
 10. For other languages, use their native phonetic systems for phonetic symbols
-11. Consider context when analyzing words.  
-12. Output raw JSON without markdown code blocks. 
-13. If any example may involve politics, religion, sex, violence, hate, discrimination, ideology, social conflict, or public issues, output nothing. No substitution. No explanation. No expansion. 
+11. Consider context when analyzing words.
+12. Output raw JSON without markdown code blocks.
+13. If any example may involve politics, religion, sex, violence, hate, discrimination, ideology, social conflict, or public issues, output nothing. No substitution. No explanation. No expansion.
 14. SINGLE WORD OUTPUT: {"phonetic": "/həˈləʊ/", "definitions": [{"pos": "excl.", "meaning": "${targetLangLabel} translation for current pos", "example": {"source": "Hello, how are you today?", "target": "${targetLangLabel} example"}}],  "translation": "translation in ${targetLangLabel}",  "contextual_analysis": "contextual analysis use ${targetLangLabel} language"}
 15. SENTENCE/PHRASE OUTPUT: {"translation": "translation in ${targetLangLabel}"}`,
               },
@@ -141,6 +141,49 @@ RULES:
       );
 
       await handleStreamResponse(response, "mixed", onUpdate, onComplete);
+    } else if (service.id === "deepseek") {
+      const response = await api.post(
+        "https://api.deepseek.com/chat/completions",
+        {
+          headers: {
+            Authorization: `Bearer ${service.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          json: {
+            model: service.model,
+            messages: [
+              {
+                role: "system",
+                content: `You are a professional multilingual translation engine. Translate the text from ${sourceLangLabel} to ${targetLangLabel}.
+
+# Output Rules
+1. For a single word: output a JSON object with phonetic, definitions (grouped by part of speech with examples), translation, and contextual_analysis.
+2. For a phrase or sentence: output a JSON object with only the translation field.
+3. Output raw JSON without markdown code blocks. No extra text.
+
+# Language Rules
+- For English: use American phonetic symbols.
+- For Chinese: use standard Pinyin with tone marks.
+- For other languages: use their native phonetic systems.
+
+# Output Format
+Word: {"phonetic": "/həˈləʊ/", "definitions": [{"pos": "excl.", "meaning": "translation in ${targetLangLabel}", "example": {"source": "Hello, how are you?", "target": "example in ${targetLangLabel}"}}], "translation": "translation in ${targetLangLabel}", "contextual_analysis": "analysis in ${targetLangLabel}"}
+Phrase/Sentence: {"translation": "translation in ${targetLangLabel}"}`,
+              },
+              {
+                role: "user",
+                content: text,
+              },
+            ],
+            stream: true,
+            response_format: { type: "json_object" },
+          },
+          timeout: 60000,
+          signal,
+        },
+      );
+
+      await handleStreamResponse(response, "openai", onUpdate, onComplete);
     } else if (service.id === "glm") {
       const response = await api.post(
         "https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -154,27 +197,27 @@ RULES:
             messages: [
               {
                 role: "system",
-                content: `# Role Definition 
+                content: `# Role Definition
 You are a professional multilingual translation engine that can translate the provided text into ${targetLangLabel}.
 # Core Capabilities
-1. Input Type Recognition: 
-- Single word: Provide dictionary functions (phonetic symbols, part of speech, definitions, example sentences) 
+1. Input Type Recognition:
+- Single word: Provide dictionary functions (phonetic symbols, part of speech, definitions, example sentences)
 - Phrase/Sentence: Return translation only
-2. Context Analysis: 
+2. Context Analysis:
 【Current Context】: ""
-# Translation Rules 
-1. For word input: 
-- Return complete dictionary information 
-- Group definitions by part of speech (keep concise, must use Simplified ${targetLangLabel}) 
+# Translation Rules
+1. For word input:
+- Return complete dictionary information
+- Group definitions by part of speech (keep concise, must use Simplified ${targetLangLabel})
 - Provide contextual analysis - Include natural context examples
-2. For phrase/sentence input: 
-- Return translation only 
-- No additional information allowed 
+2. For phrase/sentence input:
+- Return translation only
+- No additional information allowed
 3. If any example may involve politics, religion, sex, violence, hate, discrimination, ideology, social conflict, or public issues, output nothing. No substitution. No explanation. No expansion.
-4. Format Specifications: 
-- Strictly follow example JSON structure 
-- No Markdown code blocks 
-- Use American phonetic symbols for English© words (maintain original system for other languages) 
+4. Format Specifications:
+- Strictly follow example JSON structure
+- No Markdown code blocks
+- Use American phonetic symbols for English© words (maintain original system for other languages)
 # Language System Rules
 - The output must be entirely in the target language ${targetLangLabel}
 - Accurately identify the source language
@@ -182,10 +225,10 @@ You are a professional multilingual translation engine that can translate the pr
 - For Source language is Chinese, Use standard Pinyin for phonetic symbols (with tone marks)
 - For other languages, use their native phonetic systems for phonetic symbols
 - DO NOT using languages other than those requested
-# Output Examples 
+# Output Examples
 【Word Example】: {"phonetic": "/həˈləʊ/", "definitions": [{"pos": "adj.", "meaning": "hello", example": {"source": "Hello, how are you", "target": "你好啊，最近怎么样"}}],  "translation": "你好",  "contextual_analysis": "Analysis of the word's meaning within the provided context"}
 【Sentence Example】: {"translation": "This is a test sentence."}
-# Strict Prohibitions 
+# Strict Prohibitions
 - Mixed output formats
 - Missing required fields
 - Unrequested additional information- Language system mixing`,
