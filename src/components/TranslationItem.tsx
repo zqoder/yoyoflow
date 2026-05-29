@@ -183,7 +183,8 @@ export function TranslationItem({
       wasLoading &&
       !isLoading &&
       parsedResult?.translation &&
-      !onFirstCompleteCalledRef.current
+      !onFirstCompleteCalledRef.current &&
+      !abortControllerRef.current?.signal.aborted
     ) {
       onFirstCompleteCalledRef.current = true;
       onFirstCompleteRef.current?.(parsedResult, service.name);

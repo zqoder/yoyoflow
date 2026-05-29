@@ -27,16 +27,6 @@ const items = [
     icon: Languages,
   },
   {
-    title: "服务",
-    url: "/service",
-    icon: Server,
-  },
-  {
-    title: "快捷键",
-    url: "/shortcuts",
-    icon: Keyboard,
-  },
-  {
     title: "生词本",
     url: "/vocabulary",
     icon: Book,
@@ -45,6 +35,16 @@ const items = [
     title: "历史记录",
     url: "/history",
     icon: History,
+  },
+  {
+    title: "服务",
+    url: "/service",
+    icon: Server,
+  },
+  {
+    title: "快捷键",
+    url: "/shortcuts",
+    icon: Keyboard,
   },
   {
     title: "通用设置",
