@@ -21,7 +21,16 @@
       "identifier": "http:default",
       "allow": [
         {
-          "url": "https://dict.youdao.com/*"
+          "url": "https://*"
+        },
+        {
+          "url": "https://*:*"
+        },
+        {
+          "url": "http://localhost:*"
+        },
+        {
+          "url": "http://127.0.0.1:*"
         }
       ]
     },

@@ -18,7 +18,7 @@ import {
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ServiceConfig } from "@/store/services";
 import { translateText } from "@/services/translation";
-import { speakText } from "@/services/tts";
+import { detectLanguage } from "@/lib/languages";
 import type { TranslationResult, VocabularyEntry } from "@/lib/types";
 
 const ICONS = import.meta.glob("@/assets/*.png", { eager: true, as: "url" });
@@ -30,6 +30,7 @@ interface TranslationItemProps {
   targetLang: string;
   sourceLangLabel: string;
   targetLangLabel: string;
+  requestId: number;
   className?: string;
   isFavorited?: boolean;
   onToggleFavorite?: (entry: Omit<VocabularyEntry, "id" | "createdAt">) => void;
@@ -43,6 +44,7 @@ export function TranslationItem({
   targetLang,
   sourceLangLabel,
   targetLangLabel,
+  requestId,
   className,
   isFavorited,
   onToggleFavorite,
@@ -52,7 +54,7 @@ export function TranslationItem({
   const [translatedText, setTranslatedText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRequestRef = useRef(0);
 
   const [retryCount, setRetryCount] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -66,25 +68,22 @@ export function TranslationItem({
   const onFirstCompleteCalledRef = useRef(false);
   useEffect(() => {
     onFirstCompleteCalledRef.current = false;
-  }, [text, sourceLangLabel, targetLangLabel]);
+  }, [requestId]);
 
   const prevLoadingRef = useRef(isLoading);
 
   useEffect(() => {
+    const activeRequest = ++activeRequestRef.current;
+
     if (!text.trim()) {
       setTranslatedText("");
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
+    const abortController = new AbortController();
     const translate = async () => {
-      // Cancel previous request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      const abortController = new AbortController();
-      abortControllerRef.current = abortController;
-
       setIsLoading(true);
       setError(null);
       setTranslatedText("");
@@ -99,24 +98,35 @@ export function TranslationItem({
         },
         {
           onUpdate: (chunk) => {
-            setTranslatedText((prev) => prev + chunk);
+            if (activeRequestRef.current === activeRequest) {
+              setTranslatedText((prev) => prev + chunk);
+            }
           },
           onError: (err) => {
-            setError(err);
+            if (activeRequestRef.current === activeRequest) {
+              setError(err);
+              setIsLoading(false);
+            }
           },
           onComplete: () => {
-            setIsLoading(false);
+            if (
+              activeRequestRef.current === activeRequest &&
+              !abortController.signal.aborted
+            ) {
+              setIsLoading(false);
+            }
           },
         },
       );
     };
 
-    translate();
+    void translate();
 
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      if (activeRequestRef.current === activeRequest) {
+        activeRequestRef.current += 1;
       }
+      abortController.abort();
     };
   }, [
     text,
@@ -126,6 +136,7 @@ export function TranslationItem({
     sourceLangLabel,
     targetLangLabel,
     retryCount,
+    requestId,
   ]);
 
   const parsedResult = useMemo<TranslationResult | null>(() => {
@@ -182,14 +193,14 @@ export function TranslationItem({
     if (
       wasLoading &&
       !isLoading &&
+      !error &&
       parsedResult?.translation &&
-      !onFirstCompleteCalledRef.current &&
-      !abortControllerRef.current?.signal.aborted
+      !onFirstCompleteCalledRef.current
     ) {
       onFirstCompleteCalledRef.current = true;
       onFirstCompleteRef.current?.(parsedResult, service.name);
     }
-  }, [isLoading, parsedResult, service.name]);
+  }, [error, isLoading, parsedResult, service.name]);
 
   const handleCopy = async () => {
     if (!parsedResult?.translation) return;
@@ -202,47 +213,62 @@ export function TranslationItem({
     }
   };
 
-  const handleSpeak = async () => {
-    const textToSpeak = parsedResult?.phonetic
-      ? text
-      : parsedResult?.translation;
+  const handleSpeak = () => {
+    const textToSpeak =
+      parsedResult?.phonetic && targetLang !== "en"
+        ? text
+        : parsedResult?.translation;
 
-    if (!textToSpeak) return;
+    if (!textToSpeak || isSpeaking) return;
 
-    if (parsedResult?.phonetic) {
-      if (isSpeaking) return;
-      setIsSpeaking(true);
-      try {
-        const audioUrl = await speakText(textToSpeak);
-        const audio = new Audio(audioUrl);
-
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-        };
-
-        audio.onerror = (e) => {
-          console.error("Audio playback error:", e);
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-        };
-
-        await audio.play();
-      } catch (err) {
-        console.error("Failed to speak text via API: ", err);
-        setIsSpeaking(false);
-        // Fallback to browser TTS if API fails?
-        // For now, just log error as user explicitly requested API usage
-      }
-    } else {
-      // ... existing speak logic using textToSpeak ...
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.lang = targetLang;
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-      window.speechSynthesis.speak(utterance);
+    if (!("speechSynthesis" in window)) {
+      console.error("Speech synthesis is not supported by this WebView");
+      return;
     }
+
+    const language = parsedResult?.phonetic
+      ? targetLang === "en"
+        ? "en"
+        : sourceLang === "auto"
+          ? detectLanguage(textToSpeak)
+          : sourceLang
+      : targetLang;
+    const languageTags: Record<string, string> = {
+      zh: "zh-CN",
+      en: "en-US",
+      ja: "ja-JP",
+      ko: "ko-KR",
+      fr: "fr-FR",
+      de: "de-DE",
+      es: "es-ES",
+      ru: "ru-RU",
+    };
+    const languageTag = languageTags[language] ?? language;
+    const synth = window.speechSynthesis;
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+
+    utterance.lang = languageTag;
+    const languagePrefix = languageTag.split("-")[0].toLowerCase();
+    utterance.voice =
+      synth
+        .getVoices()
+        .find((voice) => voice.lang.toLowerCase() === languageTag.toLowerCase()) ??
+      synth
+        .getVoices()
+        .find((voice) =>
+          voice.lang.toLowerCase().startsWith(`${languagePrefix}-`),
+        ) ??
+      null;
+
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event.error);
+      setIsSpeaking(false);
+    };
+
+    synth.cancel();
+    setIsSpeaking(true);
+    synth.speak(utterance);
   };
 
   const handleFavorite = () => {
@@ -390,7 +416,7 @@ export function TranslationItem({
                     >
                       {parsedResult.translation}
                     </span>
-                    {parsedResult.phonetic && (
+                    {parsedResult.phonetic && targetLang !== "en" && (
                       <span
                         className={`font-medium ${isSmall ? "text-sm" : "text-lg"}`}
                       >

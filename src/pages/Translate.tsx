@@ -1,19 +1,31 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useShallow } from "zustand/shallow";
 import { Textarea } from "@/components/ui/textarea";
 import { TranslationItem } from "@/components/TranslationItem";
 import { useServiceStore } from "@/store/services";
 import { useVocabularyStore } from "@/store/vocabulary";
 import { useHistoryStore } from "@/store/history";
-import { LANGUAGES, detectLanguage } from "@/lib/languages";
+import {
+  LANGUAGES,
+  detectLanguage,
+  getAutoTargetLanguage,
+} from "@/lib/languages";
 import { ControlBar } from "@/components/ControlBar";
 import type { TranslationResult, VocabularyEntry } from "@/lib/types";
 
 export default function Translate() {
   const [inputText, setInputText] = useState("");
   const [submittedText, setSubmittedText] = useState("");
+  const [translationRequestId, setTranslationRequestId] = useState(0);
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("zh");
+
+  useEffect(() => {
+    if (sourceLang === "auto" && inputText.trim()) {
+      setTargetLang(getAutoTargetLanguage(inputText));
+    }
+  }, [inputText, sourceLang]);
+
   const services = useServiceStore((state) => state.services);
   const activeServices = services.filter(
     (s) => s.enabled && s.type === "text-translation",
@@ -53,6 +65,7 @@ export default function Translate() {
     if (!inputText.trim()) return;
     historySavedRef.current = false;
     setSubmittedText(inputText);
+    setTranslationRequestId((current) => current + 1);
   };
 
   const effectiveSourceLang =
@@ -82,7 +95,7 @@ export default function Translate() {
     const text = submittedTextRef.current;
     if (!text) return;
     historySavedRef.current = true;
-    addHistory({
+    void addHistory({
       id: crypto.randomUUID(),
       text,
       translationResult: result,
@@ -92,6 +105,9 @@ export default function Translate() {
       targetLangLabel: targetLangLabel || "",
       serviceName,
       createdAt: Date.now(),
+    }).catch((err) => {
+      historySavedRef.current = false;
+      console.error("Failed to save translation history:", err);
     });
   };
 
@@ -140,6 +156,7 @@ export default function Translate() {
                 targetLang={targetLang}
                 sourceLangLabel={effectiveSourceLangLabel || ""}
                 targetLangLabel={targetLangLabel || ""}
+                requestId={translationRequestId}
                 isFavorited={fav}
                 onToggleFavorite={handleToggleFavorite}
                 onFirstComplete={handleFirstComplete}

@@ -15,6 +15,19 @@ export async function extractTextFromImage(
 
   try {
     if (service.id === "siliconflow_ocr") {
+      const isPaddleOcr = service.model.startsWith(
+        "PaddlePaddle/PaddleOCR-VL",
+      );
+      const prompt = isPaddleOcr
+        ? "OCR:"
+        : `Extract all text from this image exactly as it appears.
+
+Rules:
+1. Output only the extracted text.
+2. Do not add explanations, prefixes, or suffixes.
+3. Preserve the original line breaks and layout as much as possible.
+4. If there is no text, output nothing.`;
+
       const response = await api.post(
         "https://api.siliconflow.cn/v1/chat/completions",
         {
@@ -28,33 +41,44 @@ export async function extractTextFromImage(
                 role: "user",
                 content: [
                   {
-                    type: "text",
-                    text: `Please extract all text from this image exactly as it appears. 
-Rules:
-1. Output ONLY the extracted text.
-2. Do not add any explanations, prefixes, or suffixes.
-3. Preserve the original line breaks and layout as much as possible.
-4. If there is no text, output nothing.`,
-                  },
-                  {
                     type: "image_url",
                     image_url: {
                       url: imageBase64,
+                      detail: "high",
                     },
+                  },
+                  {
+                    type: "text",
+                    text: prompt,
                   },
                 ],
               },
             ],
             stream: false,
-            max_tokens: 2048,
+            temperature: 0,
+            max_tokens: 4096,
           },
           timeout: 60000,
         },
       );
 
-      const data = await response.json<any>();
-      const content = data.choices?.[0]?.message?.content || "";
-      onSuccess(content.trim());
+      const data = await response.json<{
+        choices?: Array<{
+          finish_reason?: string;
+          message?: { content?: string };
+        }>;
+      }>();
+      const choice = data.choices?.[0];
+      const content = choice?.message?.content?.trim() ?? "";
+
+      if (choice?.finish_reason === "length") {
+        throw new Error("OCR 输出过长，识别结果被模型截断，请缩小截图范围");
+      }
+      if (!content) {
+        throw new Error("OCR 模型未返回可识别文本");
+      }
+
+      onSuccess(content);
     } else {
       // Mock or other services
       setTimeout(() => {

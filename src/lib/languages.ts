@@ -19,3 +19,6 @@ export const detectLanguage = (text: string) => {
   if (/[\u4e00-\u9fa5]/.test(sample)) return "zh"; // Chinese Characters
   return "en"; // Default to English/Latin
 };
+
+export const getAutoTargetLanguage = (text: string) =>
+  detectLanguage(text) === "zh" ? "en" : "zh";

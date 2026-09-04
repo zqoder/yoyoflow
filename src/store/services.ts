@@ -7,6 +7,9 @@ export type ServiceType =
   | "text-recognition"
   | "speech-synthesis";
 
+export type ServiceKind = "builtin" | "custom";
+export type ServiceProtocol = "builtin" | "openai-chat";
+
 export interface ServiceConfig {
   id: string;
   name: string;
@@ -16,6 +19,11 @@ export interface ServiceConfig {
   model: string;
   icon: string;
   serviceUrl: string;
+  kind: ServiceKind;
+  protocol: ServiceProtocol;
+  baseUrl?: string;
+  stream?: boolean;
+  timeoutMs?: number;
 }
 
 export const AVAILABLE_MODELS: Record<string, string[]> = {
@@ -38,6 +46,8 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     model: "deepseek-v4-flash",
     icon: "deepseek.png",
     serviceUrl: "https://platform.deepseek.com/api_keys",
+    kind: "builtin",
+    protocol: "builtin",
   },
   {
     id: "siliconflow",
@@ -48,6 +58,8 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     model: "Qwen/Qwen3-8B",
     icon: "siliconflow.png",
     serviceUrl: "https://cloud.siliconflow.cn/me/account/ak",
+    kind: "builtin",
+    protocol: "builtin",
   },
   {
     id: "glm",
@@ -58,6 +70,8 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     model: "general_translation",
     icon: "glm.png",
     serviceUrl: "https://bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    kind: "builtin",
+    protocol: "builtin",
   },
   {
     id: "siliconflow_ocr",
@@ -65,11 +79,19 @@ export const DEFAULT_SERVICES: ServiceConfig[] = [
     type: "text-recognition",
     enabled: false,
     apiKey: "",
-    model: "THUDM/GLM-4.1V-9B-Thinking",
+    model: "PaddlePaddle/PaddleOCR-VL-1.5",
     icon: "siliconflow.png",
     serviceUrl: "https://cloud.siliconflow.cn/me/account/ak",
+    kind: "builtin",
+    protocol: "builtin",
   },
 ];
+
+const normalizeSavedService = (service: ServiceConfig): ServiceConfig => ({
+  ...service,
+  kind: service.kind ?? "builtin",
+  protocol: service.protocol ?? "builtin",
+});
 
 interface ServiceState {
   services: ServiceConfig[];
@@ -78,102 +100,117 @@ interface ServiceState {
   initStore: () => Promise<void>;
   setActiveServiceType: (type: ServiceType) => void;
   refreshServices: () => Promise<void>;
-  updateService: (
+  updateService: <K extends keyof ServiceConfig>(
     id: string,
-    field: keyof ServiceConfig,
-    value: string | boolean,
+    field: K,
+    value: ServiceConfig[K],
   ) => Promise<void>;
+  saveCustomService: (service: ServiceConfig) => Promise<void>;
+  removeCustomService: (id: string) => Promise<void>;
 }
 
-export const useServiceStore = create<ServiceState>((set, get) => ({
-  services: DEFAULT_SERVICES,
-  activeServiceType: "text-translation",
-  store: null,
-  initStore: async () => {
-    try {
-      // Prevent multiple initializations if store is already loaded?
-      // Actually we might want to allow re-init or check if store exists.
-      // But for simplicity, let's just load.
-      let store = get().store;
-      if (!store) {
-        store = await Store.load("services.json");
-        set({ store });
-
-        // Listen for updates from other windows
-        await listen("services-updated", async () => {
-          await get().refreshServices();
-        });
-      }
-
-      await get().refreshServices();
-    } catch (err) {
-      console.error("Failed to initialize store:", err);
+export const useServiceStore = create<ServiceState>((set, get) => {
+  const persistServices = async (services: ServiceConfig[]) => {
+    let store = get().store;
+    if (!store) {
+      store = await Store.load("services.json");
+      set({ store });
     }
-  },
-  setActiveServiceType: (type: ServiceType) => {
-    set({ activeServiceType: type });
-  },
-  refreshServices: async () => {
-    const { store } = get();
-    if (!store) return;
+    await store.set("services", services);
+    await store.save();
+    await emit("services-updated");
+  };
 
-    try {
-      // Force reload from disk is not directly available on store instance easily without reload()
-      // But store.get() should return latest if we assume the file on disk changed?
-      // Actually tauri-plugin-store maintains an in-memory state.
-      // If another window updated the file, this window's store instance might be stale
-      // unless we reload the store or re-read the file.
-      // For Tauri v2 store, load() returns a new handle or existing one.
-      // Let's try reloading the store from file path to be safe, or just trust get() if it syncs.
-      // A safer bet is to re-load the store instance to ensure we get fresh data from disk.
-      // However, Store.load returns the *same* instance if already loaded in this window.
-      // We might need to call load again to ensure it reads from disk if changed externally?
-      // Actually, let's assume get() works or we need a way to reload.
-      // Looking at tauri-plugin-store docs (mental check), it auto-saves but auto-load?
-      // Let's re-invoke load to be sure.
+  return {
+    services: DEFAULT_SERVICES,
+    activeServiceType: "text-translation",
+    store: null,
 
-      // Re-load to ensure sync with disk
-      const freshStore = await Store.load("services.json");
-      // Note: if Store.load doesn't refresh from disk if already loaded, this might be an issue.
-      // But typically for cross-window, we rely on the file.
+    initStore: async () => {
+      try {
+        let store = get().store;
+        if (!store) {
+          store = await Store.load("services.json");
+          set({ store });
+          await listen("services-updated", async () => {
+            await get().refreshServices();
+          });
+        }
+        await get().refreshServices();
+      } catch (err) {
+        console.error("Failed to initialize store:", err);
+      }
+    },
 
-      const savedServices = await freshStore.get<ServiceConfig[]>("services");
-      if (savedServices) {
-        const merged = DEFAULT_SERVICES.map((def) => {
-          const saved = savedServices.find(
-            (s: ServiceConfig) => s.id === def.id,
+    setActiveServiceType: (type) => set({ activeServiceType: type }),
+
+    refreshServices: async () => {
+      try {
+        const store = get().store ?? (await Store.load("services.json"));
+        if (!get().store) set({ store });
+
+        const savedServices =
+          (await store.get<ServiceConfig[]>("services")) ?? [];
+        const normalizedSaved = savedServices.map(normalizeSavedService);
+        const builtinIds = new Set(DEFAULT_SERVICES.map((service) => service.id));
+        const mergedBuiltin = DEFAULT_SERVICES.map((defaults) => {
+          const saved = normalizedSaved.find(
+            (service) => service.id === defaults.id,
           );
-          // Ensure type is preserved or defaulted
-          return saved
-            ? { ...def, ...saved, type: saved.type || "text-translation" }
-            : def;
+          return saved ? { ...defaults, ...saved, kind: "builtin" as const } : defaults;
         });
+        const customServices = normalizedSaved.filter(
+          (service) =>
+            service.kind === "custom" && !builtinIds.has(service.id),
+        );
+        const merged = [...mergedBuiltin, ...customServices];
 
-        // Only update if changed
         if (JSON.stringify(merged) !== JSON.stringify(get().services)) {
           set({ services: merged });
         }
-      } else {
-        // Initial save if empty
-        await freshStore.set("services", DEFAULT_SERVICES);
-        await freshStore.save();
+        if (savedServices.length === 0) {
+          await store.set("services", merged);
+          await store.save();
+        }
+      } catch (err) {
+        console.error("Failed to refresh services:", err);
       }
-    } catch (err) {
-      console.error("Failed to refresh services:", err);
-    }
-  },
-  updateService: async (id, field, value) => {
-    const { services, store } = get();
-    const newServices = services.map((s) =>
-      s.id === id ? { ...s, [field]: value } : s,
-    );
-    set({ services: newServices });
+    },
 
-    if (store) {
-      await store.set("services", newServices);
-      await store.save();
-      // Notify other windows
-      await emit("services-updated");
-    }
-  },
-}));
+    updateService: async (id, field, value) => {
+      const services = get().services.map((service) =>
+        service.id === id ? { ...service, [field]: value } : service,
+      );
+      set({ services });
+      await persistServices(services);
+    },
+
+    saveCustomService: async (service) => {
+      const normalized: ServiceConfig = {
+        ...service,
+        id: service.id || `custom_${crypto.randomUUID()}`,
+        type: "text-translation",
+        kind: "custom",
+        protocol: "openai-chat",
+        icon: service.icon || "",
+        serviceUrl: "",
+      };
+      const exists = get().services.some((item) => item.id === normalized.id);
+      const services = exists
+        ? get().services.map((item) =>
+            item.id === normalized.id ? normalized : item,
+          )
+        : [...get().services, normalized];
+      set({ services });
+      await persistServices(services);
+    },
+
+    removeCustomService: async (id) => {
+      const target = get().services.find((service) => service.id === id);
+      if (!target || target.kind !== "custom") return;
+      const services = get().services.filter((service) => service.id !== id);
+      set({ services });
+      await persistServices(services);
+    },
+  };
+});
