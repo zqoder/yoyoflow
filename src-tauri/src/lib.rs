@@ -74,6 +74,7 @@ fn update_shortcuts(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(commands::HistoryState::default())
         .manage(AppState {
             main_shortcut: Mutex::new("CommandOrControl+Shift+U".to_string()),
             input_translate_shortcut: Mutex::new("Control+A".to_string()),
@@ -303,6 +304,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::my_custom_command,
+            commands::get_history_entries,
+            commands::append_history_entry,
+            commands::clear_history_entries,
             update_shortcuts
         ])
         .on_window_event(|window, event| match event {

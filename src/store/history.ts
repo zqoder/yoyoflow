@@ -1,78 +1,72 @@
 import { create } from "zustand";
-import { Store } from "@tauri-apps/plugin-store";
-import { emit, listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { HistoryEntry } from "@/lib/types";
 
-const MAX_HISTORY = 500;
+let initPromise: Promise<void> | null = null;
+
+interface HistorySnapshot {
+  revision: number;
+  entries: HistoryEntry[];
+}
 
 interface HistoryState {
   entries: HistoryEntry[];
-  store: Store | null;
   initStore: () => Promise<void>;
   refreshHistory: () => Promise<void>;
   addEntry: (entry: HistoryEntry) => Promise<void>;
   clearHistory: () => Promise<void>;
 }
 
-export const useHistoryStore = create<HistoryState>((set, get) => ({
-  entries: [],
-  store: null,
+export const useHistoryStore = create<HistoryState>((set, get) => {
+  let currentRevision = -1;
+  const applySnapshot = (snapshot: HistorySnapshot) => {
+    if (snapshot.revision < currentRevision) return;
+    currentRevision = snapshot.revision;
+    set({ entries: snapshot.entries });
+  };
 
-  initStore: async () => {
-    try {
-      let store = get().store;
-      if (!store) {
-        store = await Store.load("history.json");
-        set({ store });
+  return {
+    entries: [],
 
-        await listen("history-updated", async () => {
+    initStore: async () => {
+      if (!initPromise) {
+        initPromise = (async () => {
+          await listen<HistorySnapshot>("history-updated", (event) => {
+            applySnapshot(event.payload);
+          });
           await get().refreshHistory();
-        });
+        })();
       }
 
-      await get().refreshHistory();
-    } catch (err) {
-      console.error("Failed to initialize history store:", err);
-    }
-  },
-
-  refreshHistory: async () => {
-    const { store } = get();
-    if (!store) return;
-
-    try {
-      const freshStore = await Store.load("history.json");
-      const saved = await freshStore.get<HistoryEntry[]>("entries");
-      const entries = saved || [];
-
-      if (JSON.stringify(entries) !== JSON.stringify(get().entries)) {
-        set({ entries });
+      try {
+        await initPromise;
+      } catch (err) {
+        initPromise = null;
+        console.error("Failed to initialize history store:", err);
       }
-    } catch (err) {
-      console.error("Failed to refresh history:", err);
-    }
-  },
+    },
 
-  addEntry: async (entry: HistoryEntry) => {
-    const { entries: prev, store } = get();
-    const entries = [...prev, entry].slice(-MAX_HISTORY);
-    set({ entries });
+    refreshHistory: async () => {
+      try {
+        const snapshot = await invoke<HistorySnapshot>("get_history_entries");
 
-    if (store) {
-      await store.set("entries", entries);
-      await store.save();
-      await emit("history-updated");
-    }
-  },
+        applySnapshot(snapshot);
+      } catch (err) {
+        console.error("Failed to refresh history:", err);
+      }
+    },
 
-  clearHistory: async () => {
-    const { store } = get();
-    set({ entries: [] });
+    addEntry: async (entry: HistoryEntry) => {
+      const snapshot = await invoke<HistorySnapshot>("append_history_entry", {
+        entry,
+      });
+      applySnapshot(snapshot);
+    },
 
-    if (store) {
-      await store.set("entries", []);
-      await store.save();
-      await emit("history-updated");
-    }
-  },
-}));
+    clearHistory: async () => {
+      const snapshot = await invoke<HistorySnapshot>("clear_history_entries");
+      applySnapshot(snapshot);
+    },
+  };
+});

@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { X, Pin, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ControlBar } from "@/components/ControlBar";
-import { LANGUAGES, detectLanguage } from "@/lib/languages";
+import {
+  LANGUAGES,
+  detectLanguage,
+  getAutoTargetLanguage,
+} from "@/lib/languages";
 import { useServiceStore } from "@/store/services";
 import { useVocabularyStore } from "@/store/vocabulary";
 import { useHistoryStore } from "@/store/history";
@@ -17,9 +21,17 @@ import type { TranslationResult, VocabularyEntry } from "@/lib/types";
 export default function ShortcutTranslate() {
   const [text, setText] = useState("");
   const [submittedText, setSubmittedText] = useState("");
+  const [translationRequestId, setTranslationRequestId] = useState(0);
   const [isOcrLoading, setIsOcrLoading] = useState(false);
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("zh");
+
+  useEffect(() => {
+    if (sourceLang === "auto" && text.trim()) {
+      setTargetLang(getAutoTargetLanguage(text));
+    }
+  }, [text, sourceLang]);
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [isPinned, setIsPinned] = useState(false);
   const isPinnedRef = useRef(false);
@@ -65,6 +77,7 @@ export default function ShortcutTranslate() {
     if (!text.trim()) return;
     historySavedRef.current = false;
     setSubmittedText(text);
+    setTranslationRequestId((current) => current + 1);
   };
 
   const detectedLangCode =
@@ -100,7 +113,7 @@ export default function ShortcutTranslate() {
     const currentText = submittedTextRef.current;
     if (!currentText) return;
     historySavedRef.current = true;
-    addHistory({
+    void addHistory({
       id: crypto.randomUUID(),
       text: currentText,
       translationResult: result,
@@ -110,12 +123,16 @@ export default function ShortcutTranslate() {
       targetLangLabel: targetLangLabel || "",
       serviceName,
       createdAt: Date.now(),
+    }).catch((err) => {
+      historySavedRef.current = false;
+      console.error("Failed to save shortcut translation history:", err);
     });
   };
 
   const handleClose = async () => {
     setText("");
     setSubmittedText("");
+    historySavedRef.current = false;
     await getCurrentWindow().hide();
   };
 
@@ -162,8 +179,10 @@ export default function ShortcutTranslate() {
       (event) => {
         const selectedText = event.payload;
         if (selectedText) {
+          historySavedRef.current = false;
           setText(selectedText);
           setSubmittedText(selectedText);
+          setTranslationRequestId((current) => current + 1);
           // If we want to ensure window is visible and focused (backend handles it too)
           getCurrentWindow().show();
           getCurrentWindow().setFocus();
@@ -195,8 +214,10 @@ export default function ShortcutTranslate() {
 
         await extractTextFromImage(ocrService, imageBase64, {
           onSuccess: (extractedText) => {
+            historySavedRef.current = false;
             setText(extractedText);
             setSubmittedText(extractedText);
+            setTranslationRequestId((current) => current + 1);
             setIsOcrLoading(false);
           },
           onError: (err) => {
@@ -311,6 +332,7 @@ export default function ShortcutTranslate() {
                   targetLang={targetLang}
                   sourceLangLabel={effectiveSourceLangLabel || ""}
                   targetLangLabel={targetLangLabel || ""}
+                  requestId={translationRequestId}
                   className="text-sm"
                   isFavorited={fav}
                   onToggleFavorite={handleToggleFavorite}
